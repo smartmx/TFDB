@@ -152,13 +152,13 @@ TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
                 goto init;
             }
             /* find the addr success */
-set:
-            tfdb_memcpy(rw_buffer, value_from, index->value_length);
-            sum_verify_byte = 0;
             /* calculate sum verify */
+            sum_verify_byte = 0;
             for(uint8_t i = 0; i < index->value_length; i++){
                 sum_verify_byte = ((sum_verify_byte + rw_buffer[i]) & 0xff);
             }
+set:
+            tfdb_memcpy(rw_buffer, value_from, index->value_length);
             rw_buffer[index->value_length] = sum_verify_byte;
             for(uint8_t i = index->value_length + 1; i < aligned_value_size; i++){
                 /* fill aligned data with end_byte */
