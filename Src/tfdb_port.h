@@ -65,7 +65,7 @@ typedef enum {
 
 /* the flash write granularity, unit: byte
  * only support 1(stm32f4)/ 4(stm32f1) */
-#define TFDB_WRITE_UNIT_BYTES               4//EEPROM_MIN_WR_SIZE /* @note you must define it for a value */
+#define TFDB_WRITE_UNIT_BYTES               4 /* @note you must define it for a value */
 
 /* must not use pointer type. Please use uint32_t, uint16_t or uint8_t. */
 typedef uint32_t    tfdb_addr_t;
