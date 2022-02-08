@@ -36,13 +36,13 @@ TFDB_Err_Code tfdb_check(const tfdb_index_t *index, uint8_t *rw_buffer)
 {
     TFDB_Err_Code result;
 
-    TFDB_PRINTF("tfdb_check >\n");
+    TFDB_DEBUG("tfdb_check >\n");
 
     /* flash_size / value_len / end_byte */
     result = tfdb_port_read(index->flash_addr, rw_buffer, 4);
     if(result != TFDB_NO_ERR){
         //read err
-        TFDB_PRINTF("    read err\n");
+        TFDB_DEBUG("    read err\n");
         goto end;
     }
     result = TFDB_HDR_ERR;
@@ -55,7 +55,7 @@ TFDB_Err_Code tfdb_check(const tfdb_index_t *index, uint8_t *rw_buffer)
         }
     }
 end:
-    TFDB_PRINTF("tfdb_check:%d\n",result);
+    TFDB_DEBUG("tfdb_check:%d\n",result);
     return result;
 }
 
@@ -71,12 +71,12 @@ TFDB_Err_Code tfdb_init(const tfdb_index_t *index, uint8_t *rw_buffer)
 {
     TFDB_Err_Code result = TFDB_NO_ERR;
 
-    TFDB_PRINTF("tfdb_init >\n");
+    TFDB_DEBUG("tfdb_init >\n");
 
     result = tfdb_port_erase(index->flash_addr, index->flash_size);
     if(result != TFDB_NO_ERR){
         //erase err
-        TFDB_PRINTF("    erase err\n");
+        TFDB_DEBUG("    erase err\n");
         goto end;
     }
     rw_buffer[0] = ((index->flash_size >> 8) & 0xff);
@@ -87,16 +87,17 @@ TFDB_Err_Code tfdb_init(const tfdb_index_t *index, uint8_t *rw_buffer)
     result = tfdb_port_write(index->flash_addr, rw_buffer, 4);
     if(result != TFDB_NO_ERR){
         //write err
-        TFDB_PRINTF("    write err\n");
+        TFDB_DEBUG("    write err\n");
         goto end;
     }
     result = tfdb_check(index, rw_buffer);
     if(result != TFDB_NO_ERR){
+        TFDB_DEBUG("    flash ERR\n");
         result = TFDB_FLASH_ERR;
         goto end;
     }
 end:
-    TFDB_PRINTF("tfdb_init:%d\n",result);
+    TFDB_DEBUG("tfdb_init:%d\n",result);
     return result;
 }
 
@@ -116,7 +117,7 @@ TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
     tfdb_addr_t find_addr;
     uint8_t aligned_value_size;
     uint8_t sum_verify_byte;
-    TFDB_PRINTF("tfdb_set >\n");
+    TFDB_DEBUG("tfdb_set >\n");
 
     aligned_value_size  = index->value_length + 2;/* data + verify + end_byte */
 #if (TFDB_WRITE_UNIT_BYTES==4)
@@ -135,7 +136,7 @@ TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
                 /* start to find value */
                 result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
                 if(result != TFDB_NO_ERR){
-                    TFDB_PRINTF("    read err\n");
+                    TFDB_DEBUG("    read err\n");
                     goto end;
                 }
                 if((rw_buffer[aligned_value_size - 1] == TFDB_VALUE_AFTER_ERASE)){
@@ -152,12 +153,14 @@ TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
                 goto init;
             }
             /* find the addr success */
+            TFDB_DEBUG("    find success\n");
+set:
             /* calculate sum verify */
             sum_verify_byte = 0;
             for(uint8_t i = 0; i < index->value_length; i++){
-                sum_verify_byte = ((sum_verify_byte + rw_buffer[i]) & 0xff);
+                sum_verify_byte = ((sum_verify_byte + ((uint8_t *)(value_from))[i]) & 0xff);
             }
-set:
+write:
             tfdb_memcpy(rw_buffer, value_from, index->value_length);
             rw_buffer[index->value_length] = sum_verify_byte;
             for(uint8_t i = index->value_length + 1; i < aligned_value_size; i++){
@@ -166,23 +169,25 @@ set:
             }
             result = tfdb_port_write(find_addr, rw_buffer, aligned_value_size);
             if(result != TFDB_NO_ERR){
-                TFDB_PRINTF("    write err\n");
+                TFDB_DEBUG("    write err\n");
                 goto end;
             }
             result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
             if(result != TFDB_NO_ERR){
-                TFDB_PRINTF("    read err\n");
+                TFDB_DEBUG("    read err\n");
                 goto end;
             }
             if((tfdb_memcmp(rw_buffer, value_from, index->value_length) != TFDB_MEMCMP_SAME) \
                 || (rw_buffer[index->value_length] != sum_verify_byte)\
                 || (rw_buffer[aligned_value_size - 1] != index->end_byte)){
                 /* write verify failed, maybe the flash is error, try next address. */
+                TFDB_DEBUG("    Write verify failed, try next address.\n");
                 find_addr += aligned_value_size;
                 if((index->flash_size + index->flash_addr - find_addr) >= (aligned_value_size)){
-                    goto set;
+                    goto write;
                 } else {
                     /* the flash is fill */
+                    TFDB_DEBUG("    the flash is fill\n");
                     goto init;
                 }
             } else {
@@ -194,6 +199,7 @@ set:
             }
         } else if (result == TFDB_HDR_ERR){
 init:
+            TFDB_DEBUG("    header ERR\n");
             result = tfdb_init(index, rw_buffer);
             if(result == TFDB_NO_ERR){
                 find_addr = index->flash_addr + 4;
@@ -202,16 +208,18 @@ init:
         }
     } else {
         /* addr_cache is set */
+        TFDB_DEBUG("    addr_cache is set\n");
         find_addr = *addr_cache + aligned_value_size;
         if(find_addr > (index->flash_addr + index->flash_size - aligned_value_size)){
             /* the flash is fill */
+            TFDB_DEBUG("    the flash is fill\n");
             goto init;
         } else {
             goto set;
         }
     }
 end:
-    TFDB_PRINTF("tfdb_set:%d\n",result);
+    TFDB_DEBUG("tfdb_set:%d\n",result);
     return result;
 }
 
@@ -231,7 +239,7 @@ TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
     tfdb_addr_t find_addr;
     uint8_t aligned_value_size;
     uint8_t sum_verify_byte;
-    TFDB_PRINTF("tfdb_get >\n");
+    TFDB_DEBUG("tfdb_get >\n");
 
     aligned_value_size  = index->value_length + 2;/* data + verify + end_byte */
 #if (TFDB_WRITE_UNIT_BYTES==4)
@@ -250,7 +258,7 @@ TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
                 /* start to find value */
                 result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
                 if(result != TFDB_NO_ERR){
-                    TFDB_PRINTF("    read err\n");
+                    TFDB_DEBUG("    read err\n");
                     goto end;
                 }
                 if((rw_buffer[aligned_value_size - 1] == TFDB_VALUE_AFTER_ERASE)){
@@ -267,7 +275,7 @@ TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
                 find_addr = find_addr - aligned_value_size;
                 result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
                 if(result != TFDB_NO_ERR){
-                    TFDB_PRINTF("    read err\n");
+                    TFDB_DEBUG("    read err\n");
                     goto end;
                 }
                 goto verify;
@@ -282,19 +290,22 @@ verify:
                 if((sum_verify_byte != rw_buffer[index->value_length])\
                     || (rw_buffer[aligned_value_size - 1] != index->end_byte)){
                     /* not right data, maybe the flash is broken. */
+                    TFDB_DEBUG("verify err:%02x,%02x,end:%02x\n",sum_verify_byte,rw_buffer[index->value_length],rw_buffer[aligned_value_size - 1]);
                     find_addr = find_addr - aligned_value_size;
                     if(find_addr >= (index->flash_addr + 4)){
                         result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
                         if(result != TFDB_NO_ERR){
-                            TFDB_PRINTF("    read err\n");
+                            TFDB_DEBUG("    read err\n");
                             goto end;
                         }
                         goto verify;
                     } else {
+                        TFDB_DEBUG("    flash err\n");
                         result = TFDB_FLASH_ERR;
                         goto end;
                     }
                 } else {
+                    TFDB_DEBUG("    find success\n");
                     result = TFDB_NO_ERR;
                     tfdb_memcpy(value_to, rw_buffer, index->value_length);
                     if(addr_cache != NULL){
@@ -303,6 +314,7 @@ verify:
                 }
             }
         } else {
+            TFDB_DEBUG("    header ERR\n");
             result = TFDB_HDR_ERR;
             goto end;
         }
@@ -310,12 +322,12 @@ verify:
         find_addr = *addr_cache;
         result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
         if(result != TFDB_NO_ERR){
-            TFDB_PRINTF("    read err\n");
+            TFDB_DEBUG("    read err\n");
             goto end;
         }
         goto verify;
     }
 end:
-    TFDB_PRINTF("tfdb_get:%d\n",result);
+    TFDB_DEBUG("tfdb_get:%d\n",result);
     return result;
 }

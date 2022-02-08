@@ -58,7 +58,7 @@ typedef enum {
 #define TFDB_MEMCMP_SAME 
 #endif
 
-#define TFDB_PRINTF                         printf
+#define TFDB_DEBUG                          printf 
 
 /* The data value in flash after erased, most are 0xff, some flash maybe different. */
 #define TFDB_VALUE_AFTER_ERASE              0xff
