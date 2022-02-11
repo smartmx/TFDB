@@ -29,16 +29,13 @@
 #include "CH58x_common.h"
 #include "config.h"
 
-/* tiny flash db error code */
+/* tinyflashdb error code */
 typedef enum {
     TFDB_NO_ERR = 0,
     TFDB_ERASE_ERR,
     TFDB_READ_ERR,
     TFDB_WRITE_ERR,
-    TFDB_VERIFY_ERR,
-    TFDB_INIT_ERR,
     TFDB_HDR_ERR,
-    TFDB_FIND_ERR,
     TFDB_FILL_ERR,
     TFDB_FLASH_ERR,
     TFDB_ERR_MAX,
@@ -50,12 +47,10 @@ typedef enum {
 #if TFDB_USE_STRING_H
 #include "string.h"
 #define tfdb_memcpy memcpy
-#define tfdb_memset memset
 #define tfdb_memcmp memcmp
 #define TFDB_MEMCMP_SAME 0
 #else
 #define tfdb_memcpy tmos_memcpy
-#define tfdb_memset tmos_memset
 #define tfdb_memcmp tmos_memcmp
 #define TFDB_MEMCMP_SAME TRUE
 #endif
@@ -66,8 +61,11 @@ typedef enum {
 #define TFDB_VALUE_AFTER_ERASE              0xff
 
 /* the flash write granularity, unit: byte
- * only support 1(stm32f4)/ 4(stm32f1) */
+ * only support 1(stm32f4)/ 2(CH559)/ 4(stm32f1) */
 #define TFDB_WRITE_UNIT_BYTES               1//EEPROM_MIN_WR_SIZE /* @note you must define it for a value */
+
+/* @note the max retry times when flash is error ,set 0 will disable retry count */
+#define TFDB_WRITE_MAX_RETRY                32
 
 /* must not use pointer type. Please use uint32_t, uint16_t or uint8_t. */
 typedef uint32_t    tfdb_addr_t;

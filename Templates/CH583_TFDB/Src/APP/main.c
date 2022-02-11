@@ -86,7 +86,7 @@ int main(void)
     maddr = 0;//ÖØÖÃµØÖ·
 #endif
     tests = 0;
-    result = tfdb_get(&tetttt,tfkvtest,&maddr,&tests);//50016 - 48652 = 1364B
+    result = tfdb_get(&tetttt,tfkvtest,&maddr,&tests);
     if(result == TFDB_NO_ERR){
         PRINT("tests:%d\n",tests);
     }

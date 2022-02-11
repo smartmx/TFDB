@@ -21,12 +21,12 @@ void main()
     TFDB_Err_Code result;
     result = tfdb_set(&test_index, test_buf, &addr, &test_value);
     if(result == TFDB_NO_ERR){
-        PRINT("set ok, addr:%x\n", addr);
+        printf("set ok, addr:%x\n", addr);
     }
 
     result = tfdb_get(&test_index, test_buf, &addr, &test_value);
     if(result == TFDB_NO_ERR){
-        PRINT("get ok, addr:%x, value:%x\n", addr, test_value);
+        printf("get ok, addr:%x, value:%x\n", addr, test_value);
     }
 }
 ```
@@ -40,7 +40,9 @@ void main()
 同时也考虑了偶发的flash错误，有简单的纠错机制，可以使产品寿命更长。  
 代码Flash占用不到1kb,RAM占用全由用户根据存储的大小决定。  
 
-flash配置目前仅支持1字节和4字节操作的flash，不支持其他flash。通过修改tfdb_port.h中宏定义：TFDB_WRITE_UNIT_BYTES 完成配置。  
+flash配置仅支持1字节、2字节和4字节操作的flash，不支持其他flash。  
+一般很多eeprom都是1字节、32位单片机片上flash一般为4字节，8位单片机为1字节或2字节。  
+通过修改tfdb_port.h中宏定义：TFDB_WRITE_UNIT_BYTES 完成配置。  
 
 flash错误一般都是无法从0写到1，即无法擦除。  
 tfdb_set写操作会去寻找到最后一个擦除后的位置进行写入。  
@@ -48,7 +50,7 @@ tfdb_get读操作会先找最后一个擦除未写入的位置，从后往前读
 
 该库中，函数申请局部变量很少，需要使用到的读写缓存空间由用户申请后，作为参数传递给函数使用，函数不使用栈内存。  
 因为有的芯片的flash加密，只可以调用api函数，对读写缓存有特殊要求。所以将其整理成函数参数有助于更合理的编写flash接口函数。  
-rw_buffer指针指向的数组长度必须是aligned_value_size（可以查看代码看计算方式）大小，使用需要根据自己存储的变量长度申请局部变量进行使用。  
+rw_buffer指针指向的数组长度必须最少4字节,并且比aligned_value_size（可以查看代码看计算方式）大，使用需要根据自己存储的变量长度申请局部变量进行使用。  
 
 
 ## 该库的主要理念就是：一个分配过来的flash空间只存一个变量，无备份等操作。擦除也是将该分配的空间大小直接全部擦除，并不会按照flash的最小擦除大小擦除。

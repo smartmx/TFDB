@@ -27,14 +27,14 @@
 
 #include "tfdb_port.h"
 
-#define TFDB_VERSION    "0.0.1"
+#define TFDB_VERSION    "0.0.3"
 
 typedef struct _tfdb_index_struct{
     tfdb_addr_t     flash_addr;/* the start address of the flash block */
     uint16_t        flash_size;/* the size of the flash block */
     uint8_t         value_length;/* the length of value that saved in this flash block */
     uint8_t         end_byte; /* must different to TFDB_VALUE_AFTER_ERASE */
-    /* 0x00 is recommended for end_byte£¬because almost all flash is 0xff after erase. */
+    /* 0x00 is recommended for end_byte, because almost all flash is 0xff after erase. */
 }tfdb_index_t;
 
 extern TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, void* value_to);
