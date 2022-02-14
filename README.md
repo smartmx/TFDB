@@ -154,6 +154,6 @@ typedef uint32_t    tfdb_addr_t;
 ```
 
 ## Demo：  
-[STM32F429IGT6](`https://github.com/smartmx/TFDB/tree/main/Templates/STM32F429IGT6_TFDB`)  
-[CH583](`https://github.com/smartmx/TFDB/tree/main/Templates/CH583_TFDB`)  
+[STM32F429IGT6](https://github.com/smartmx/TFDB/tree/main/Templates/STM32F429IGT6_TFDB)  
+[CH583](https://github.com/smartmx/TFDB/tree/main/Templates/CH583_TFDB)  
 
