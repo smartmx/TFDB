@@ -153,7 +153,7 @@ TFDB_Err_Code tfdb_port_write(tfdb_addr_t addr, const uint8_t *buf, size_t size)
 typedef uint32_t    tfdb_addr_t;
 ```
 
-## Demo试用：  
-[STM32F429IGT6](`\Templates\STM32F429IGT6_TFDB`)  
-[CH583](`\Templates\CH583_TFDB`)  
+## Demo：  
+[STM32F429IGT6](`https://github.com/smartmx/TFDB/tree/main/Templates/STM32F429IGT6_TFDB`)  
+[CH583](`https://github.com/smartmx/TFDB/tree/main/Templates/CH583_TFDB`)  
 
