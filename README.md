@@ -1,16 +1,20 @@
 # TFDB
+
  Tiny Flash Database for MCU.
 
-## TinyFlashDB设计前言：
+## TinyFlashDB设计前言
+
 在单片机日常开发中，总会需要存储一些信息，这时就需要使用单片机FLASH存储的方案，目前单片机存储的方案有很多，比如：EASYFLASH、FLASHDB、OSAL_NV等等方案，他们程序都非常大，在存储不多的变量时不值得。而且现有方案的代码中很少有考虑到flash写入出错的情况。  
 在实际产品中，嵌入式产品flash写入可能会受各种因素影响（电池供电、意外断电、气温等）从而并不是很稳定，一旦出现错误，会导致产品一系列问题。  
 
-## TinyFlashDB设计理念：
+## TinyFlashDB设计理念
+
 不同于其他很多的KV型数据库，TinyFlashDB每一个需要存储的变量都会分配一个单独的单片机flash扇区，变量长度不可变。  
 TinyFlashDB在设计时就考虑了写入错误的影响，追求力所能及的安全保障、资源占用方面尽可能的缩小（不到1kb代码占用）、尽可能的通用性（可以移植到51等8位机，无法逆序写入的stm32L4系列，某些flash加密的单片机和其他普通32位机上）。  
 
-## TinyFlashDB使用示例：
-```
+## TinyFlashDB使用示例
+
+```c
 const tfdb_index_t test_index = {
     .end_byte = 0x00,
     .flash_addr = 0x4000,
@@ -38,8 +42,10 @@ void main()
     }
 }
 ```
-## TinyFlashDB API介绍：
-```
+
+## TinyFlashDB API介绍
+
+```c
 typedef struct _tfdb_index_struct{
     tfdb_addr_t     flash_addr;/* the start address of the flash block */
     uint16_t        flash_size;/* the size of the flash block */
@@ -48,14 +54,16 @@ typedef struct _tfdb_index_struct{
     /* 0x00 is recommended for end_byte, because almost all flash is 0xff after erase. */
 }tfdb_index_t;
 ```
+
 结构体功能：在TinyFlashDB中，API的操作都需要指定的参数index，该index结构体中存储了flash的地址，flash的大小，存储的变量的长度，结束标志位。 在读取flash扇区时会去校验此信息。  
 
-```
+```c
 TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, void* value_to);
 ```
+
 函数功能：从index指向的扇区中获取一个index中指定变量长度的变量，flash头部数据校验出错不会重新初始化flash。  
 
-参数 index：tfdb操作的index指针。    
+参数 index：tfdb操作的index指针。
 
 参数 rw_buffer：写入和读取的缓存，所有flash的操作最后都会将整理后的数据拷贝到该buffer中，再调用tfdb_port_write或者tfdb_port_read进行写入。当芯片对于写入的数据区缓存有特殊要求（例如4字节对齐，256字节对齐等），可以通过该参数将符合要求的变量指针传递给函数使用。至少为4字节长度。  
 
@@ -65,7 +73,7 @@ TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
 
 返回值：TFDB_NO_ERR成功，其他失败。  
 
-```
+```c
 TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, void* value_from);
 ```
 
@@ -81,7 +89,8 @@ TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
 
 返回值：TFDB_NO_ERR成功，其他失败。  
 
-## TinyFlashDB设计原理：
+## TinyFlashDB设计原理
+
 观察上方代码，可以发现TinyFlashDB的操作都需要tfdb_index_t定义的index参数。  
 Flash初始化后头部信息为4字节，所以只支持1、2、4字节操作的flash：    
 头部初始化时会读取头部，所以函数中rw_buffer指向的数据第一要求至少为4字节。  
@@ -90,8 +99,9 @@ Flash初始化后头部信息为4字节，所以只支持1、2、4字节操作�
 -|-|-|-
 |flash_size高8字节|flash_size低8字节|value_length|end_byte|
 
-数据存储时，会根据flash支持的字节操作进行对齐，所以函数中rw_buffer指向的数据第二要求至少为下面函数中计算得出的aligned_value_size个字节：  
-```
+数据存储时，会根据flash支持的字节操作进行对齐，所以函数中rw_buffer指向的数据第二要求至少为下面函数中计算得出的aligned_value_size个字节：
+
+```c
     aligned_value_size  = index->value_length + 2;/* data + verify + end_byte */
  
 #if (TFDB_WRITE_UNIT_BYTES==2)
@@ -111,9 +121,11 @@ Flash初始化后头部信息为4字节，所以只支持1、2、4字节操作�
 
 读取数据时也会计算和校验，不通过的话继续读取，直到返回校验通过的最新数据，或者读取失败。  
 
-## TinyFlashDB移植和配置：
-### 移植使用只需要在tfdb_port.c中，编写完成三个接口函数，也要在tfdb_port.h中添加相应的头文件和根据不同芯片修改宏定义：
-```
+## TinyFlashDB移植和配置
+
+### 移植使用只需要在tfdb_port.c中，编写完成三个接口函数，也要在tfdb_port.h中添加相应的头文件和根据不同芯片修改宏定义
+
+```c
 TFDB_Err_Code tfdb_port_read(tfdb_addr_t addr, uint8_t *buf, size_t size);
 
 TFDB_Err_Code tfdb_port_erase(tfdb_addr_t addr, size_t size);
@@ -121,8 +133,9 @@ TFDB_Err_Code tfdb_port_erase(tfdb_addr_t addr, size_t size);
 TFDB_Err_Code tfdb_port_write(tfdb_addr_t addr, const uint8_t *buf, size_t size);
 ```
 
-### 所有的配置项都在tfdb_port.h中：
-```
+### 所有的配置项都在tfdb_port.h中
+
+```c
 /* use string.h or self functions */
 #define TFDB_USE_STRING_H               1
  
@@ -153,7 +166,7 @@ TFDB_Err_Code tfdb_port_write(tfdb_addr_t addr, const uint8_t *buf, size_t size)
 typedef uint32_t    tfdb_addr_t;
 ```
 
-## Demo：  
+## Demo
+
 [STM32F429IGT6](https://github.com/smartmx/TFDB/tree/main/Templates/STM32F429IGT6_TFDB)  
 [CH583](https://github.com/smartmx/TFDB/tree/main/Templates/CH583_TFDB)  
-
