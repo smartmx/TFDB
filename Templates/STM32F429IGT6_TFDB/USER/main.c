@@ -27,10 +27,10 @@ const u8 TEXT_Buffer[]={"STM32 FLASH TEST"};
 										//否则,写操作的时候,可能会导致擦除整个扇区,从而引起部分程序丢失.引起死机.
 
 const tfdb_index_t test_index = {
-		.end_byte = 0x00,
 		.flash_addr = FLASH_SAVE_ADDR,
 		.flash_size = 16*1024,
 		.value_length = 4,
+		.end_byte = 0x00,
 };
 
 tfdb_addr_t addr = 0; /*addr cache*/

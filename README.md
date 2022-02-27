@@ -97,7 +97,7 @@ Flash初始化后头部信息为4字节，所以只支持1、2、4字节操作�
 
 |第一字节|第二字节|第三字节|第四字节|
 -|-|-|-
-|flash_size高8字节|flash_size低8字节|value_length|end_byte|
+|flash_size高8位字节|flash_size低8位字节|value_length|end_byte|
 
 数据存储时，会根据flash支持的字节操作进行对齐，所以函数中rw_buffer指向的数据第二要求至少为下面函数中计算得出的aligned_value_size个字节：
 
@@ -115,7 +115,7 @@ Flash初始化后头部信息为4字节，所以只支持1、2、4字节操作�
 
 |前value_length字节|第value_length+1字节|第value_length+2字节|其他对齐字节|
 -|-|-|-
-|value_from|value_from和校验|end_byte|end_byte|  
+|value_from|value_from的和校验|end_byte|end_byte|  
 
 每次写入后都会再读取出来进行校验，如果校验不通过，就会继续在下一个地址写入。指导达到最大写入次数（TFDB_WRITE_MAX_RETRY）或者头部校验错误。  
 
