@@ -171,7 +171,6 @@ start:
 #else
             find_addr = index->flash_addr + 4;
 #endif
-            result = TFDB_FILL_ERR;
             while ((find_addr) <= (index->flash_size + index->flash_addr - aligned_value_size))
             {
                 /* start to find value */
@@ -184,7 +183,6 @@ start:
                 if ((rw_buffer[aligned_value_size - 1] == TFDB_VALUE_AFTER_ERASE))
                 {
                     /* find value addr success */
-                    result = TFDB_NO_ERR;
                     break;
                 }
                 else
@@ -194,7 +192,7 @@ start:
                 }
             }
             /* the flash block is fill */
-            if (result == TFDB_FILL_ERR)
+            if ((find_addr) > (index->flash_size + index->flash_addr - aligned_value_size))
             {
                 goto init;
             }
@@ -265,8 +263,8 @@ write:
         }
         else if (result == TFDB_HDR_ERR)
         {
+            TFDB_DEBUG("    header err\n");
 init:
-            TFDB_DEBUG("    header ERR\n");
             result = tfdb_init(index, rw_buffer);
             if (result == TFDB_NO_ERR)
             {
@@ -352,7 +350,6 @@ start:
 #else
             find_addr = index->flash_addr + 4;
 #endif
-            result = TFDB_FILL_ERR;
             while ((find_addr) <= (index->flash_size + index->flash_addr - aligned_value_size))
             {
                 /* start to find value */
@@ -365,7 +362,6 @@ start:
                 if ((rw_buffer[aligned_value_size - 1] == TFDB_VALUE_AFTER_ERASE))
                 {
                     /* find value addr success */
-                    result = TFDB_NO_ERR;
                     break;
                 }
                 else
@@ -374,9 +370,9 @@ start:
                     find_addr += aligned_value_size;
                 }
             }
-            if (result == TFDB_NO_ERR)
+            /* the flash block is not fill. And if it's fill， the data in rw_buffer is what we need. */
+            if ((find_addr) <= (index->flash_size + index->flash_addr - aligned_value_size))
             {
-                /* TFDB_NO_ERR */
                 find_addr = find_addr - aligned_value_size;
                 result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
                 if (result != TFDB_NO_ERR)
@@ -385,7 +381,6 @@ start:
                     goto end;
                 }
             }
-            /* TFDB_FILL_ERR */
 verify:
             sum_verify_byte = 0;
             /* calculate sum verify */
