@@ -37,12 +37,13 @@
 TFDB_Err_Code tfdb_port_read(tfdb_addr_t addr, uint8_t *buf, size_t size)
 {
     TFDB_Err_Code result = TFDB_NO_ERR;
-		uint8_t *buf_8 = (uint8_t *)buf;
-		size_t i;
+    uint32_t *buf_32 = (uint32_t *)buf;
+    size_t i;
 
     /* You can add your code under here. */
-		for (i = 0; i < size; i++, addr ++, buf_8++) {
-        *buf_8 = *(uint8_t *) addr;
+    for (i = 0; i < size; i += 4, addr += 4, buf_32++)
+    {
+        *buf_32 = *(uint32_t *) addr;
     }
     return result;
 }
@@ -57,33 +58,39 @@ TFDB_Err_Code tfdb_port_read(tfdb_addr_t addr, uint8_t *buf, size_t size)
 TFDB_Err_Code tfdb_port_erase(tfdb_addr_t addr, size_t size)
 {
     TFDB_Err_Code result = TFDB_NO_ERR;
-		FLASH_EraseInitTypeDef FlashEraseInit;
-		HAL_StatusTypeDef FlashStatus=HAL_OK;
-		u32 SectorError=0;
+    FLASH_EraseInitTypeDef FlashEraseInit;
+    HAL_StatusTypeDef FlashStatus = HAL_OK;
+    u32 SectorError = 0;
     /* You can add your code under here. */
-		HAL_FLASH_Unlock();             //解锁	
-		FlashEraseInit.TypeErase=FLASH_TYPEERASE_SECTORS;       //擦除类型，扇区擦除 
-		FlashEraseInit.Sector=STMFLASH_GetFlashSector(addr);    //要擦除的扇区
-		FlashEraseInit.NbSectors=STMFLASH_GetFlashSector(addr + size) - FlashEraseInit.Sector + 1;   //擦除多个扇区
-		FlashEraseInit.VoltageRange=FLASH_VOLTAGE_RANGE_3;      //电压范围，VCC=2.7~3.6V之间!!
-		if(HAL_FLASHEx_Erase(&FlashEraseInit,&SectorError)!=HAL_OK) 
-		{
-			result = TFDB_ERASE_ERR;//发生错误了	
-		} else {
-			FlashStatus=FLASH_WaitForLastOperation(FLASH_WAITETIME * FlashEraseInit.NbSectors);            //等待上次操作完成
-			if(FlashStatus!=HAL_OK)
-			{
-				result = TFDB_ERASE_ERR;//发生错误了	
-			}
-		}
-		
-		HAL_FLASH_Lock();           //上锁
+    HAL_FLASH_Unlock();             //解锁
+    FlashEraseInit.TypeErase = FLASH_TYPEERASE_SECTORS;     //擦除类型，扇区擦除
+    FlashEraseInit.Sector = STMFLASH_GetFlashSector(addr);  //要擦除的扇区
+    FlashEraseInit.NbSectors = STMFLASH_GetFlashSector(addr + size) - FlashEraseInit.Sector + 1; //擦除多个扇区
+    FlashEraseInit.VoltageRange = FLASH_VOLTAGE_RANGE_3;    //电压范围，VCC=2.7~3.6V之间!!
+    if (HAL_FLASHEx_Erase(&FlashEraseInit, &SectorError) != HAL_OK)
+    {
+        result = TFDB_ERASE_ERR;//发生错误了
+    }
+    else
+    {
+        FlashStatus = FLASH_WaitForLastOperation(FLASH_WAITETIME * FlashEraseInit.NbSectors);          //等待上次操作完成
+        if (FlashStatus != HAL_OK)
+        {
+            result = TFDB_ERASE_ERR;//发生错误了
+        }
+    }
+
+    HAL_FLASH_Lock();           //上锁
     return result;
 }
 
 /**
  * Write data to flash.
  * @note This operation's units is refer to TFDB_WRITE_UNIT_BYTES.
+ * if you're using some flash like stm32L4xx, please add flash check
+ * operations before write flash to ensure the write area is erased.
+ * if the write area is not erased, please just return TFDB_NO_ERR.
+ * TFDB will check data and retry at next address.
  *
  * @param addr flash address.
  * @param buf the write data buffer.
@@ -94,22 +101,22 @@ TFDB_Err_Code tfdb_port_erase(tfdb_addr_t addr, size_t size)
 TFDB_Err_Code tfdb_port_write(tfdb_addr_t addr, const uint8_t *buf, size_t size)
 {
     TFDB_Err_Code result = TFDB_NO_ERR;
-		uint32_t *pBuffer = (uint32_t *)buf;
-		uint32_t WriteAddr = addr;
-		uint32_t endaddr = addr + size;
+    uint32_t *pBuffer = (uint32_t *)buf;
+    uint32_t WriteAddr = addr;
+    uint32_t endaddr = addr + size;
     /* You can add your code under here. */
-		HAL_FLASH_Unlock();             //解锁	
-		while(WriteAddr<endaddr)//写数据
-		{
-			if(HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD,WriteAddr,*pBuffer)!=HAL_OK)//写入数据
-			{ 
-				break;	//写入异常
-			}
-			WriteAddr+=4;
-			pBuffer++;
-		}  
-	
-		HAL_FLASH_Lock();           //上锁
+    HAL_FLASH_Unlock();             //解锁
+    while (WriteAddr < endaddr) //写数据
+    {
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, WriteAddr, *pBuffer) != HAL_OK) //写入数据
+        {
+            break;  //写入异常
+        }
+        WriteAddr += 4;
+        pBuffer++;
+    }
+
+    HAL_FLASH_Lock();           //上锁
     return result;
 }
 

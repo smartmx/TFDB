@@ -32,12 +32,14 @@ void main()
 {
     TFDB_Err_Code result;
     result = tfdb_set(&test_index, test_buf, &addr, &test_value);
-    if(result == TFDB_NO_ERR){
+    if(result == TFDB_NO_ERR)
+    {
         printf("set ok, addr:%x\n", addr);
     }
 
     result = tfdb_get(&test_index, test_buf, &addr, &test_value);
-    if(result == TFDB_NO_ERR){
+    if(result == TFDB_NO_ERR)
+    {
         printf("get ok, addr:%x, value:%x\n", addr, test_value);
     }
 }
@@ -92,10 +94,10 @@ TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
 ## TinyFlashDB设计原理
 
 观察上方代码，可以发现TinyFlashDB的操作都需要tfdb_index_t定义的index参数。  
-Flash初始化后头部信息为4字节，所以只支持1、2、4字节操作的flash：    
-头部初始化时会读取头部，所以函数中rw_buffer指向的数据第一要求至少为4字节。  
+Flash初始化后头部信息为4字节，所以只支持1、2、4、8字节操作的flash：  
+头部初始化时会读取头部，所以函数中rw_buffer指向的数据第一要求至少为4字节，如果最小写入单位是8字节，则为第一要求最少为8字节。  
 
-|第一字节|第二字节|第三字节|第四字节|
+|第一字节|第二字节|第三字节|第四字节和其他对齐字节|
 -|-|-|-
 |flash_size高8位字节|flash_size低8位字节|value_length|end_byte|
 
@@ -110,12 +112,15 @@ Flash初始化后头部信息为4字节，所以只支持1、2、4字节操作�
 #elif (TFDB_WRITE_UNIT_BYTES==4)
     /* aligned with TFDB_WRITE_UNIT_BYTES */
     aligned_value_size = ((aligned_value_size + 3) & 0xfc);
+#elif (TFDB_WRITE_UNIT_BYTES==8)
+    /* aligned with TFDB_WRITE_UNIT_BYTES */
+    aligned_value_size = ((aligned_value_size + 7) & 0xf8);
 #endif
 ```
 
-|前value_length字节|第value_length+1字节|第value_length+2字节|其他对齐字节|
+|前value_length个字节|第value_length+1字节|第value_length+2字节|其他对齐字节|
 -|-|-|-
-|value_from|value_from的和校验|end_byte|end_byte|  
+|value_from数据内容|value_from的和校验|end_byte|end_byte|  
 
 每次写入后都会再读取出来进行校验，如果校验不通过，就会继续在下一个地址写入。指导达到最大写入次数（TFDB_WRITE_MAX_RETRY）或者头部校验错误。  
 
@@ -138,30 +143,30 @@ TFDB_Err_Code tfdb_port_write(tfdb_addr_t addr, const uint8_t *buf, size_t size)
 ```c
 /* use string.h or self functions */
 #define TFDB_USE_STRING_H               1
- 
+
 #if TFDB_USE_STRING_H
-#include "string.h"
-#define tfdb_memcpy memcpy
-#define tfdb_memcmp memcmp
-#define TFDB_MEMCMP_SAME 0
+    #include "string.h"
+    #define tfdb_memcpy memcpy
+    #define tfdb_memcmp memcmp
+    #define TFDB_MEMCMP_SAME 0
 #else
-#define tfdb_memcpy 
-#define tfdb_memcmp 
-#define TFDB_MEMCMP_SAME 
+    #define tfdb_memcpy
+    #define tfdb_memcmp
+    #define TFDB_MEMCMP_SAME
 #endif
- 
-#define TFDB_DEBUG                          printf 
- 
+
+#define TFDB_DEBUG                          printf
+
 /* The data value in flash after erased, most are 0xff, some flash maybe different. */
 #define TFDB_VALUE_AFTER_ERASE              0xff
- 
+
 /* the flash write granularity, unit: byte
- * only support 1(stm32f4)/ 2(CH559)/ 4(stm32f1) */
-#define TFDB_WRITE_UNIT_BYTES               4 /* @note you must define it for a value */
- 
+ * only support 1(stm32f4)/ 2(CH559)/ 4(stm32f1)/ 8(stm32L4) */
+#define TFDB_WRITE_UNIT_BYTES               8 /* @note you must define it for a value */
+
 /* @note the max retry times when flash is error ,set 0 will disable retry count */
 #define TFDB_WRITE_MAX_RETRY                32
- 
+
 /* must not use pointer type. Please use uint32_t, uint16_t or uint8_t. */
 typedef uint32_t    tfdb_addr_t;
 ```

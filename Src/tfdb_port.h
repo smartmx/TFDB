@@ -26,9 +26,11 @@
 #define _TFDB_PORT_H_
 
 /* add headers of your chips */
+#include "stdint.h"
 
-/* tiny flash db error code */
-typedef enum {
+/* tinyflashdb error code */
+typedef enum
+{
     TFDB_NO_ERR = 0,
     TFDB_ERASE_ERR,
     TFDB_READ_ERR,
@@ -43,24 +45,24 @@ typedef enum {
 #define TFDB_USE_STRING_H               1
 
 #if TFDB_USE_STRING_H
-#include "string.h"
-#define tfdb_memcpy memcpy
-#define tfdb_memcmp memcmp
-#define TFDB_MEMCMP_SAME 0
+    #include "string.h"
+    #define tfdb_memcpy memcpy
+    #define tfdb_memcmp memcmp
+    #define TFDB_MEMCMP_SAME 0
 #else
-#define tfdb_memcpy 
-#define tfdb_memcmp 
-#define TFDB_MEMCMP_SAME 
+    #define tfdb_memcpy
+    #define tfdb_memcmp
+    #define TFDB_MEMCMP_SAME
 #endif
 
-#define TFDB_DEBUG                          printf 
+#define TFDB_DEBUG                          printf
 
 /* The data value in flash after erased, most are 0xff, some flash maybe different. */
 #define TFDB_VALUE_AFTER_ERASE              0xff
 
 /* the flash write granularity, unit: byte
- * only support 1(stm32f4)/ 2(CH559)/ 4(stm32f1) */
-#define TFDB_WRITE_UNIT_BYTES               4 /* @note you must define it for a value */
+ * only support 1(stm32f4)/ 2(CH559)/ 4(stm32f1)/ 8(stm32L4) */
+#define TFDB_WRITE_UNIT_BYTES               8 /* @note you must define it for a value */
 
 /* @note the max retry times when flash is error ,set 0 will disable retry count */
 #define TFDB_WRITE_MAX_RETRY                32

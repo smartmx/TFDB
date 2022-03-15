@@ -60,6 +60,10 @@ TFDB_Err_Code tfdb_port_erase(tfdb_addr_t addr, size_t size)
 /**
  * Write data to flash.
  * @note This operation's units is refer to TFDB_WRITE_UNIT_BYTES.
+ * if you're using some flash like stm32L4xx, please add flash check
+ * operations before write flash to ensure the write area is erased.
+ * if the write area is not erased, please just return TFDB_NO_ERR.
+ * TFDB will check data and retry at next address.
  *
  * @param addr flash address.
  * @param buf the write data buffer.
