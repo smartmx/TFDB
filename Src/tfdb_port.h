@@ -36,7 +36,6 @@ typedef enum
     TFDB_READ_ERR,
     TFDB_WRITE_ERR,
     TFDB_HDR_ERR,
-    TFDB_FILL_ERR,
     TFDB_FLASH_ERR,
     TFDB_ERR_MAX,
 } TFDB_Err_Code;
