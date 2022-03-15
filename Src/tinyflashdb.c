@@ -370,10 +370,10 @@ start:
                     find_addr += aligned_value_size;
                 }
             }
-            /* the flash block is not fill. And if it's fill， the data in rw_buffer is what we need. */
-            if ((find_addr) <= (index->flash_size + index->flash_addr - aligned_value_size))
+            find_addr = find_addr - aligned_value_size;
+            if ((find_addr) <= (index->flash_size + index->flash_addr - (2 * aligned_value_size)))
             {
-                find_addr = find_addr - aligned_value_size;
+                /* the flash block is not fill. And if it's fill， the data in rw_buffer is what we need. */
                 result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
                 if (result != TFDB_NO_ERR)
                 {
