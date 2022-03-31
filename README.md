@@ -173,7 +173,8 @@ typedef uint32_t    tfdb_addr_t;
 
 ## Demo
 
-[STM32F429IGT6](https://github.com/smartmx/TFDB/tree/main/Templates/STM32F429IGT6_TFDB)  
-[CH583](https://github.com/smartmx/TFDB/tree/main/Templates/CH583_TFDB)  
+裸机移植例程，RT-Thread可以参考使用：  
+[STM32F429IGT6](https://github.com/smartmx/TFDB/tree/raw/Templates/STM32F429IGT6_TFDB)  
+[CH583](https://github.com/smartmx/TFDB/tree/raw/Templates/CH583_TFDB)  
 
 ## [博客主页](https://blog.maxiang.vip/)
