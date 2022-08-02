@@ -20,13 +20,14 @@
  * SOFTWARE.
  *
  * This file is part of the Tiny Flash DataBase Library.
- * 
+ *
  * Change Logs:
  * Date           Author       Notes
  * 2022-02-03     smartmx      the first version
  * 2022-02-08     smartmx      fix bugs
  * 2022-02-12     smartmx      fix bugs, add support for 2 byte write flash
  * 2022-03-15     smartmx      fix bugs, add support for stm32l4 flash
+ * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
  *
  */
 #include "tinyflashdb.h"
@@ -187,10 +188,25 @@ start:
                     TFDB_DEBUG("    read err\n");
                     goto end;
                 }
-                if ((rw_buffer[aligned_value_size - 1] == TFDB_VALUE_AFTER_ERASE))
+                if ((rw_buffer[aligned_value_size - 1] == (TFDB_VALUE_AFTER_ERASE & 0x000000ff)))
                 {
-                    /* find value addr success */
-                    break;
+#if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
+                    if ((rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE>>8) & 0x000000ff)))
+                    {
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
+#if TFDB_VALUE_AFTER_ERASE_SIZE == 4
+                        if ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE>>16) & 0x000000ff)) &&
+                                (rw_buffer[aligned_value_size - 4] == ((TFDB_VALUE_AFTER_ERASE>>24) & 0x000000ff)))
+                        {
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
+                            /* find value addr success */
+                            break;
+#if TFDB_VALUE_AFTER_ERASE_SIZE == 4
+                        }
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
+#if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
+                    }
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
                 }
                 else
                 {
@@ -366,10 +382,25 @@ start:
                     TFDB_DEBUG("    read err\n");
                     goto end;
                 }
-                if ((rw_buffer[aligned_value_size - 1] == TFDB_VALUE_AFTER_ERASE))
+                if ((rw_buffer[aligned_value_size - 1] == (TFDB_VALUE_AFTER_ERASE & 0x000000ff)))
                 {
-                    /* find value addr success */
-                    break;
+#if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
+                    if ((rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE>>8) & 0x000000ff)))
+                    {
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
+#if TFDB_VALUE_AFTER_ERASE_SIZE == 4
+                        if ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE>>16) & 0x000000ff)) &&
+                                (rw_buffer[aligned_value_size - 4] == ((TFDB_VALUE_AFTER_ERASE>>24) & 0x000000ff)))
+                        {
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
+                            /* find value addr success */
+                            break;
+#if TFDB_VALUE_AFTER_ERASE_SIZE == 4
+                        }
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
+#if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
+                    }
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
                 }
                 else
                 {
@@ -380,7 +411,7 @@ start:
             find_addr = find_addr - aligned_value_size;
             if ((find_addr) <= (index->flash_size + index->flash_addr - (2 * aligned_value_size)))
             {
-                /* the flash block is not fill. And if it's fill， the data in rw_buffer is what we need. */
+                /* the flash block is not fill. And if it's fill, the data in rw_buffer is what we need. */
                 result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
                 if (result != TFDB_NO_ERR)
                 {

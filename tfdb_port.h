@@ -20,13 +20,14 @@
  * SOFTWARE.
  *
  * This file is part of the Tiny Flash DataBase Library.
- * 
+ *
  * Change Logs:
  * Date           Author       Notes
  * 2022-02-03     smartmx      the first version
  * 2022-02-08     smartmx      fix bugs
  * 2022-02-12     smartmx      fix bugs, add support for 2 byte write flash
  * 2022-03-15     smartmx      fix bugs, add support for stm32l4 flash
+ * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
  *
  */
 #ifndef _TFDB_PORT_H_
@@ -63,12 +64,21 @@ typedef enum
 
 #define TFDB_DEBUG                          printf
 
-/* The data value in flash after erased, most are 0xff, some flash maybe different. */
+/* The data value in flash after erased, most are 0xff, some flash maybe different.
+ * if it's over 1 byte, please be care of little endian or big endian. */
 #define TFDB_VALUE_AFTER_ERASE              0xff
+
+/* The size of value in flash after erased, only support 1/2/4.
+ * This value must not bigger than TFDB_WRITE_UNIT_BYTES. */
+#define TFDB_VALUE_AFTER_ERASE_SIZE         1
 
 /* the flash write granularity, unit: byte
  * only support 1(stm32f4)/ 2(CH559)/ 4(stm32f1)/ 8(stm32L4) */
-#define TFDB_WRITE_UNIT_BYTES               8 /* @note you must define it for a value */
+#define TFDB_WRITE_UNIT_BYTES               4 /* @note you must define it for a value */
+
+#if TFDB_VALUE_AFTER_ERASE_SIZE > TFDB_WRITE_UNIT_BYTES
+    #error "TFDB_VALUE_AFTER_ERASE_SIZE must not bigger than TFDB_WRITE_UNIT_BYTES."
+#endif
 
 /* @note the max retry times when flash is error ,set 0 will disable retry count */
 #define TFDB_WRITE_MAX_RETRY                32

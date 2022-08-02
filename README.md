@@ -157,8 +157,13 @@ TFDB_Err_Code tfdb_port_write(tfdb_addr_t addr, const uint8_t *buf, size_t size)
 
 #define TFDB_DEBUG                          printf
 
-/* The data value in flash after erased, most are 0xff, some flash maybe different. */
+/* The data value in flash after erased, most are 0xff, some flash maybe different.
+ * if it's over 1 byte, please be care of little endian or big endian. */
 #define TFDB_VALUE_AFTER_ERASE              0xff
+
+/* The size of TFDB_VALUE_AFTER_ERASE, only support 1 / 2 / 4.
+ * This value must not bigger than TFDB_WRITE_UNIT_BYTES. */
+#define TFDB_VALUE_AFTER_ERASE_SIZE         1
 
 /* the flash write granularity, unit: byte
  * only support 1(stm32f4)/ 2(CH559)/ 4(stm32f1)/ 8(stm32L4) */
@@ -169,6 +174,49 @@ TFDB_Err_Code tfdb_port_write(tfdb_addr_t addr, const uint8_t *buf, size_t size)
 
 /* must not use pointer type. Please use uint32_t, uint16_t or uint8_t. */
 typedef uint32_t    tfdb_addr_t;
+```
+
+## TFDB资源占用
+
+在去除DEBUG打印信息后，资源占用如下：
+
+### Cortex M4平台
+
+keil -o2编译优化选项
+
+```c
+      Code (inc. data)   RO Data    RW Data    ZI Data      Debug   Object Name
+
+       154          0          0          0          0       2621   tfdb_port.o
+       682          0          0          0          0       4595   tinyflashdb.o
+```
+
+### RISC-V平台
+
+gcc -os编译优化选项
+
+```c
+ .text.tfdb_port_read
+                0x00000000000039b4       0x1a ./Drivers/TFDB/tfdb_port.o
+                0x00000000000039b4                tfdb_port_read
+ .text.tfdb_port_erase
+                0x00000000000039ce       0x46 ./Drivers/TFDB/tfdb_port.o
+                0x00000000000039ce                tfdb_port_erase
+ .text.tfdb_port_write
+                0x0000000000003a14       0x5c ./Drivers/TFDB/tfdb_port.o
+                0x0000000000003a14                tfdb_port_write
+ .text.tfdb_check
+                0x0000000000003a70       0x56 ./Drivers/TFDB/tinyflashdb.o
+                0x0000000000003a70                tfdb_check
+ .text.tfdb_init
+                0x0000000000003ac6       0x56 ./Drivers/TFDB/tinyflashdb.o
+                0x0000000000003ac6                tfdb_init
+ .text.tfdb_set
+                0x0000000000003b1c      0x186 ./Drivers/TFDB/tinyflashdb.o
+                0x0000000000003b1c                tfdb_set
+ .text.tfdb_get
+                0x0000000000003ca2      0x11c ./Drivers/TFDB/tinyflashdb.o
+                0x0000000000003ca2                tfdb_get
 ```
 
 ## Demo

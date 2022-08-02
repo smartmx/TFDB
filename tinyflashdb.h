@@ -20,13 +20,14 @@
  * SOFTWARE.
  *
  * This file is part of the Tiny Flash DataBase Library.
- * 
+ *
  * Change Logs:
  * Date           Author       Notes
  * 2022-02-03     smartmx      the first version
  * 2022-02-08     smartmx      fix bugs
  * 2022-02-12     smartmx      fix bugs, add support for 2 byte write flash
  * 2022-03-15     smartmx      fix bugs, add support for stm32l4 flash
+ * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
  *
  */
 #ifndef _TINY_FLASH_DB_H_
@@ -34,7 +35,7 @@
 
 #include "tfdb_port.h"
 
-#define TFDB_VERSION    "0.0.5"
+#define TFDB_VERSION    "0.0.6"
 
 typedef struct _tfdb_index_struct
 {
