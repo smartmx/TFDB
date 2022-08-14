@@ -231,7 +231,7 @@ set:
 write:
 #if TFDB_WRITE_MAX_RETRY
             max_retry++;
-            if (max_retry > TFDB_WRITE_MAX_RETRY)
+            if (max_retry >= TFDB_WRITE_MAX_RETRY)
             {
                 result = TFDB_FLASH_ERR;
                 goto end;
