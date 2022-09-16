@@ -37,6 +37,8 @@ void main()
         printf("set ok, addr:%x\n", addr);
     }
 
+    addr = 0;   /* reset addr cache, to see tfdb_get. */
+
     result = tfdb_get(&test_index, test_buf, &addr, &test_value);
     if(result == TFDB_NO_ERR)
     {
