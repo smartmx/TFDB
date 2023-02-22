@@ -65,45 +65,172 @@ typedef struct _tfdb_index_struct{
 TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, void* value_to);
 ```
 
-函数功能：从index指向的扇区中获取一个index中指定变量长度的变量，flash头部数据校验出错不会重新初始化flash。  
+函数功能：从`index`指向的扇区中获取一个index中指定变量长度的变量，flash头部数据校验出错不会重新初始化flash。  
 
-参数 index：tfdb操作的index指针。
+参数 `index`：tfdb操作的index指针。
 
-参数 rw_buffer：写入和读取的缓存，所有flash的操作最后都会将整理后的数据拷贝到该buffer中，再调用tfdb_port_write或者tfdb_port_read进行写入。当芯片对于写入的数据区缓存有特殊要求（例如4字节对齐，256字节对齐等），可以通过该参数将符合要求的变量指针传递给函数使用。至少为4字节长度。  
+参数 `rw_buffer`：写入和读取的缓存，所有flash的操作最后都会将整理后的数据拷贝到该buffer中，再调用`tfdb_port_write`或者`tfdb_port_read`进行读取写入。当芯片对于写入的数据区缓存有特殊要求（例如4字节对齐，256字节对齐等），可以通过该参数将符合要求的变量指针传递给函数使用。至少为4字节长度。  
 
-参数 addr_cache：可以是NULL，或者是地址缓存变量的指针，当addr_cache不为NULL，并且也不为0时，则认为addr_cache已经初始化成功，不再校验flash头部，直接从该addr_cache的地址读取数据。  
+参数 `addr_cache`：可以是`NULL`，或者是地址缓存变量的指针，当`addr_cache`不为`NULL`，并且也不为0时，则认为`addr_cache`已经初始化成功，不再校验flash头部，直接从该`addr_cache`的地址读取数据。  
 
-参数 value_to：要存储数据内容的地址。  
+参数 `value_to`：要存储数据内容的地址。  
 
-返回值：TFDB_NO_ERR成功，其他失败。  
+返回值：`TFDB_NO_ERR`成功，其他失败。  
 
 ```c
 TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, void* value_from);
 ```
 
+函数功能：在`index`指向的扇区中写入一个index中指定变量长度的变量，flash头部数据校验出错重新初始化flash。  
+
+参数 `index`：tfdb操作的index指针。  
+
+参数 `rw_buffer`：写入和读取的缓存，所有flash的操作最后都会将整理后的数据拷贝到该buffer中，再调用`tfdb_port_write`或者`tfdb_port_read`进行读取写入。当芯片对于写入的数据区缓存有特殊要求（例如4字节对齐，256字节对齐等），可以通过该参数将符合要求的变量指针传递给函数使用。至少为4字节长度。  
+
+参数 `addr_cache`：可以是`NULL`，或者是地址缓存变量的指针，当`addr_cache`不为`NULL`，并且也不为0时，则认为`addr_cache`已经初始化成功，不再校验flash头部，直接从该`addr_cache`的地址读取数据。  
+
+参数 `value_from`：要存储的数据内容。  
+
+返回值：`TFDB_NO_ERR`成功，其他失败。  
+
+## TinyFlashDB dual使用示例
+
+tfdb dual api是基于`tfdb_set`和`tfdb_get`封装而成的。`tfdb dual`会调用`tfdb_set`和`tfdb_get`，并且在数据前部添加两个字节的seq，所以在tfdb dual中，最长支持的存储变量长度为253字节。  
+同时，tfdb dual api需要提供两个缓冲区，并且需要是增加两字节变量长度再重新计算的`aligned_value_size`。
+
+```c
+typedef struct _my_test_params_struct
+{
+    uint32_t    aa[2];
+    uint8_t     bb[16];
+} my_test_params_t;
+
+my_test_params_t my_test_params = {
+        1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18
+};
+
+tfdb_dual_index_t my_test_tfdb_dual = {
+        .indexes[0] = {
+                .end_byte     = 0x00,
+                .flash_addr   = 0x08077000,
+                .flash_size   = 256,
+                .value_length = sizeof(my_test_params_t) + 2,
+        },
+        .indexes[1] = {
+                .end_byte     = 0x00,
+                .flash_addr   = 0x08077100,
+                .flash_size   = 256,
+                .value_length = sizeof(my_test_params_t) + 2,
+        },
+};
+
+tfdb_dual_cache_t my_test_tfdb_dual_cache = {0};
+
+void my_test_tfdb_dual_func()
+{
+    uint32_t rw_buffer[32], rw_buffer_bak[32];
+    TFDB_Err_Code err;
+    for(uint8_t i = 0; i < 36; i++)
+    {
+        err = tfdb_dual_get(&my_test_tfdb_dual, (uint8_t *)rw_buffer, (uint8_t *)rw_buffer_bak, &my_test_tfdb_dual_cache, &my_test_params);
+        if(err == TFDB_NO_ERR)
+        {
+            printf("read ok\ncache seq1:0x%04x, seq2:0x%04x\naddr1:0x%08x, addr2:0x%08x\n", my_test_tfdb_dual_cache.seq[0], my_test_tfdb_dual_cache.seq[1], my_test_tfdb_dual_cache.addr_cache[0], my_test_tfdb_dual_cache.addr_cache[1]);
+        }
+        else
+        {
+            printf("read err:%d\n", err);
+        }
+
+        my_test_params.aa[0]++;
+        my_test_params.aa[1]++;
+        for(uint8_t i = 0; i < 16; i++)
+        {
+            my_test_params.bb[i]++;
+        }
+
+        memset(&my_test_tfdb_dual_cache, 0, sizeof(my_test_tfdb_dual_cache));   /* 测试无地址缓存写入 */
+
+        err = tfdb_dual_set(&my_test_tfdb_dual, (uint8_t *)rw_buffer, (uint8_t *)rw_buffer_bak, &my_test_tfdb_dual_cache, &my_test_params);
+        if(err == TFDB_NO_ERR)
+        {
+            printf("write ok\ncache seq1:0x%04x, seq2:0x%04x\naddr1:0x%08x, addr2:0x%08x\n", my_test_tfdb_dual_cache.seq[0], my_test_tfdb_dual_cache.seq[1], my_test_tfdb_dual_cache.addr_cache[0], my_test_tfdb_dual_cache.addr_cache[1]);
+        }
+        else
+        {
+            printf("write err:%d\n", err);
+        }
+
+        memset(&my_test_tfdb_dual_cache, 0, sizeof(my_test_tfdb_dual_cache));   /* 测试无地址缓存读取 */
+    }
+}
+
+```
+
+## TinyFlashDB dual API介绍
+
+```c
+typedef struct _tfdb_dual_index_struct
+{
+    tfdb_index_t indexes[2];
+} tfdb_dual_index_t;
+
+typedef struct _tfdb_dual_cache_struct
+{
+    tfdb_addr_t     addr_cache[2];
+    uint16_t        seq[2];
+} tfdb_dual_cache_t;
+```
+
+结构体功能：在TinyFlashDB dual中，API的操作都需要指定的参数`index`，该`index`结构体中存储了两个`tfdb_index_t`。
+
+```c
+TFDB_Err_Code tfdb_dual_get(const tfdb_dual_index_t *index, uint8_t *rw_buffer, uint8_t *rw_buffer_bak, tfdb_dual_cache_t *cache, void *value_to);
+```
+
+函数功能：从index指向的扇区中获取一个index中指定变量长度的变量，flash头部数据校验出错不会重新初始化flash。  
+
+参数 `index`：tfdb操作的index指针。
+
+参数 `rw_buffer`：写入和读取的缓存，所有flash的操作最后都会将整理后的数据拷贝到该buffer中，再调用`tfdb_port_write`或者`tfdb_port_read`进行读取写入。当芯片对于写入的数据区缓存有特殊要求（例如4字节对齐，256字节对齐等），可以通过该参数将符合要求的变量指针传递给函数使用。至少为4字节长度。  
+
+参数 `rw_buffer_bak`：写入和读取的缓存，所有flash的操作最后都会将整理后的数据拷贝到该buffer中，再调用`tfdb_port_write`或者`tfdb_port_read`进行读取写入。当芯片对于写入的数据区缓存有特殊要求（例如4字节对齐，256字节对齐等），可以通过该参数将符合要求的变量指针传递给函数使用。至少为4字节长度。  
+
+参数 `cache`：不可以是`NULL`，必须是`tfdb_dual_cache_t`定义的缓存的指针，当`cache`中数据合法时，则认为`cache`已经初始化成功，直接从该`cache`的flash块和地址读取数据。  
+
+参数 `value_to`：要存储数据内容的地址。  
+
+返回值：`TFDB_NO_ERR`成功，其他失败。  
+
+```c
+TFDB_Err_Code tfdb_dual_set(const tfdb_dual_index_t *index, uint8_t *rw_buffer, uint8_t *rw_buffer_bak, tfdb_dual_cache_t *cache, void *value_from);
+```
+
 函数功能：在index指向的扇区中写入一个index中指定变量长度的变量，flash头部数据校验出错重新初始化flash。  
 
-参数 index：tfdb操作的index指针。  
+参数 `index`：tfdb操作的index指针。  
 
-参数 rw_buffer：写入和读取的缓存，所有flash的操作最后都会将整理后的数据拷贝到该buffer中，再调用tfdb_port_write或者tfdb_port_read进行写入。当芯片对于写入的数据区缓存有特殊要求（例如4字节对齐，256字节对齐等），可以通过该参数将符合要求的变量指针传递给函数使用。至少为4字节长度。  
+参数 `rw_buffer`：写入和读取的缓存，所有flash的操作最后都会将整理后的数据拷贝到该buffer中，再调用`tfdb_port_write`或者`tfdb_port_read`进行读取写入。当芯片对于写入的数据区缓存有特殊要求（例如4字节对齐，256字节对齐等），可以通过该参数将符合要求的变量指针传递给函数使用。至少为4字节长度。  
 
-参数 addr_cache：可以是NULL，或者是地址缓存变量的指针，当addr_cache不为NULL，并且也不为0时，则认为addr_cache已经初始化成功，不再校验flash头部，直接从该addr_cache的地址读取数据。  
+参数 `rw_buffer_bak`：写入和读取的缓存，所有flash的操作最后都会将整理后的数据拷贝到该buffer中，再调用`tfdb_port_write`或者`tfdb_port_read`进行读取写入。当芯片对于写入的数据区缓存有特殊要求（例如4字节对齐，256字节对齐等），可以通过该参数将符合要求的变量指针传递给函数使用。至少为4字节长度。  
 
-参数 value_from：要存储的数据内容。  
+参数 `cache`：不可以是`NULL`，必须是`tfdb_dual_cache_t`定义的缓存的指针，当`cache`中数据合法时，则认为`cache`已经初始化成功，直接从该`cache`的flash块和地址读取数据。  
 
-返回值：TFDB_NO_ERR成功，其他失败。  
+参数 `value_from`：要存储的数据内容。  
+
+返回值：`TFDB_NO_ERR`成功，其他失败。  
 
 ## TinyFlashDB设计原理
 
-观察上方代码，可以发现TinyFlashDB的操作都需要tfdb_index_t定义的index参数。  
+观察上方代码，可以发现TinyFlashDB的操作都需要`tfdb_index_t`定义的`index`参数。  
 Flash初始化后头部信息为4字节，所以只支持1、2、4、8字节操作的flash：  
-头部初始化时会读取头部，所以函数中rw_buffer指向的数据第一要求至少为4字节，如果最小写入单位是8字节，则为第一要求最少为8字节。  
+头部初始化时会读取头部，所以函数中`rw_buffer`指向的数据第一要求至少为4字节，如果最小写入单位是8字节，则为第一要求最少为8字节。  
 
 |第一字节|第二字节|第三字节|第四字节和其他对齐字节|
 -|-|-|-
 |flash_size高8位字节|flash_size低8位字节|value_length|end_byte|
 
-数据存储时，会根据flash支持的字节操作进行对齐，所以函数中rw_buffer指向的数据第二要求至少为下面函数中计算得出的aligned_value_size个字节：
+数据存储时，会根据flash支持的字节操作进行对齐，所以函数中`rw_buffer`指向的数据第二要求至少为下面函数中计算得出的`aligned_value_size`个字节：
 
 ```c
     aligned_value_size  = index->value_length + 2;/* data + verify + end_byte */
@@ -127,6 +254,12 @@ Flash初始化后头部信息为4字节，所以只支持1、2、4、8字节操�
 每次写入后都会再读取出来进行校验，如果校验不通过，就会继续在下一个地址继续尝试写入。直到达到最大写入次数（TFDB_WRITE_MAX_RETRY）或者头部校验错误。  
 
 读取数据时也会计算和校验，不通过的话继续读取，直到返回校验通过的最新数据，或者读取失败。  
+
+## TinyFlashDB dual设计原理
+
+数据前部两字节seq只有3种合法值，0x00ff->0x0ff0->0xff00。  
+如此循环往复，通过读取两个block中最新变量的seq来判断哪个flash扇区中存储的是最新值。  
+当最新值存储在第一扇区时，下次写入则会在第二扇区写入，反之亦然。
 
 ## TinyFlashDB移植和配置
 

@@ -1,25 +1,7 @@
 /*
- * Copyright (c) 2022, smartmx - smartmx@qq.com
+ * Copyright (c) 2022-2023, smartmx - smartmx@qq.com
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * This file is part of the Tiny Flash DataBase Library.
+ * SPDX-License-Identifier: MIT
  *
  * Change Logs:
  * Date           Author       Notes
@@ -28,6 +10,7 @@
  * 2022-02-12     smartmx      fix bugs, add support for 2 byte write flash
  * 2022-03-15     smartmx      fix bugs, add support for stm32l4 flash
  * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
+ * 2023-02-22     smartmx      add dual flash index function
  *
  */
 #include "tinyflashdb.h"
@@ -191,12 +174,12 @@ start:
                 if ((rw_buffer[aligned_value_size - 1] == (TFDB_VALUE_AFTER_ERASE & 0x000000ff)))
                 {
 #if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
-                    if ((rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE>>8) & 0x000000ff)))
+                    if ((rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE >> 8) & 0x000000ff)))
                     {
 #endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
 #if TFDB_VALUE_AFTER_ERASE_SIZE == 4
-                        if ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE>>16) & 0x000000ff)) &&
-                                (rw_buffer[aligned_value_size - 4] == ((TFDB_VALUE_AFTER_ERASE>>24) & 0x000000ff)))
+                        if ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE >> 16) & 0x000000ff)) &&
+                                (rw_buffer[aligned_value_size - 4] == ((TFDB_VALUE_AFTER_ERASE >> 24) & 0x000000ff)))
                         {
 #endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
                             /* find value addr success */
@@ -301,25 +284,28 @@ init:
             goto end;
         }
     }
-    else if (*addr_cache == 0)
-    {
-        /* addr_cache is not set */
-        goto start;
-    }
     else
     {
-        /* addr_cache is set */
-        TFDB_DEBUG("    addr_cache is set\n");
-        find_addr = *addr_cache + aligned_value_size;
-        if (find_addr > (index->flash_addr + index->flash_size - aligned_value_size))
+        if (*addr_cache == 0)
         {
-            /* the flash is fill */
-            TFDB_DEBUG("    the flash is fill\n");
-            goto init;
+            /* addr_cache is not set */
+            goto start;
         }
         else
         {
-            goto set;
+            /* addr_cache is set */
+            TFDB_DEBUG("    addr_cache is set\n");
+            find_addr = *addr_cache + aligned_value_size;
+            if (find_addr > (index->flash_addr + index->flash_size - aligned_value_size))
+            {
+                /* the flash is fill */
+                TFDB_DEBUG("    the flash is fill\n");
+                goto init;
+            }
+            else
+            {
+                goto set;
+            }
         }
     }
 end:
@@ -385,12 +371,12 @@ start:
                 if ((rw_buffer[aligned_value_size - 1] == (TFDB_VALUE_AFTER_ERASE & 0x000000ff)))
                 {
 #if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
-                    if ((rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE>>8) & 0x000000ff)))
+                    if ((rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE >> 8) & 0x000000ff)))
                     {
 #endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
 #if TFDB_VALUE_AFTER_ERASE_SIZE == 4
-                        if ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE>>16) & 0x000000ff)) &&
-                                (rw_buffer[aligned_value_size - 4] == ((TFDB_VALUE_AFTER_ERASE>>24) & 0x000000ff)))
+                        if ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE >> 16) & 0x000000ff)) &&
+                                (rw_buffer[aligned_value_size - 4] == ((TFDB_VALUE_AFTER_ERASE >> 24) & 0x000000ff)))
                         {
 #endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
                             /* find value addr success */
@@ -471,23 +457,276 @@ verify:
             goto end;
         }
     }
-    else if (*addr_cache == 0)
-    {
-        /* addr_cache is not set */
-        goto start;
-    }
     else
     {
-        find_addr = *addr_cache;
-        result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
-        if (result != TFDB_NO_ERR)
+        if (*addr_cache == 0)
         {
-            TFDB_DEBUG("    read err\n");
-            goto end;
+            /* addr_cache is not set */
+            goto start;
         }
-        goto verify;
+        else
+        {
+            find_addr = *addr_cache;
+            result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
+            if (result != TFDB_NO_ERR)
+            {
+                TFDB_DEBUG("    read err\n");
+                goto end;
+            }
+            goto verify;
+        }
     }
 end:
     TFDB_DEBUG("tfdb_get:%d\n", result);
     return result;
+}
+
+/**
+ * judge which seq is new.
+ *
+ * @param seq the pointer to seq[2] buffer.
+ *
+ * @return uint8_t which seq is new, 0xff means all seq is illegal.
+ */
+static uint8_t tfdb_dual_judge(uint16_t *seq)
+{
+    /* seq range: 0x00ff -> 0x0ff0 -> 0xff00 */
+    switch (seq[0])
+    {
+    case 0xff00:
+        if (seq[1] == 0x00ff)
+        {
+            return 1;
+        }
+        else
+        {
+            return 0;
+        }
+    case 0x0ff0:
+        if (seq[1] == 0xff00)
+        {
+            return 1;
+        }
+        else
+        {
+            return 0;
+        }
+    case 0x00ff:
+        if (seq[1] == 0x0ff0)
+        {
+            return 1;
+        }
+        else
+        {
+            return 0;
+        }
+    default:
+        if ((seq[1] == 0x00ff) || (seq[1] == 0x0ff0) || (seq[1] == 0xff00))
+        {
+            return 1;
+        }
+        break;
+    }
+    return 0xff;
+}
+
+/**
+ * judge which seq is new.
+ *
+ * @param seq the pointer to seq[2] buffer.
+ *
+ * @return uint8_t which seq is new, 0xff means all seq is illegal.
+ */
+static uint16_t tfdb_dual_get_next_seq(uint16_t seq)
+{
+    /* seq range: 0x00ff -> 0x0ff0 -> 0xff00 */
+    if (seq == 0x00ff)
+    {
+        return 0x0ff0;
+    }
+    else if (seq == 0x0ff0)
+    {
+        return 0xff00;
+    }
+    else
+    {
+        return 0x00ff;
+    }
+}
+
+/**
+ * set data in flash and save the addr and seq to cache.
+ *
+ * @param index the data manage index.
+ * @param rw_buffer buffer to store prepared read data or write data.
+ * @param rw_buffer_bak buffer to store prepared read data or write data.
+ * @param cache the pointer to addr which is user offered, which will save read addr and seq.
+ * @param value_from the pointer to buffer which is user offered that need to save.
+ *
+ * @return TFDB_Err_Code
+ */
+TFDB_Err_Code tfdb_dual_get(const tfdb_dual_index_t *index, uint8_t *rw_buffer, uint8_t *rw_buffer_bak, tfdb_dual_cache_t *cache, void *value_to)
+{
+    TFDB_Err_Code rresult = TFDB_NO_ERR;
+    TFDB_Err_Code result[2];
+    uint8_t judge_state;
+
+    if (cache != NULL)
+    {
+        judge_state = tfdb_dual_judge(cache->seq);
+
+        TFDB_DEBUG("tfdb_dual_judge:%d\n", judge_state);
+
+        /* usually, we just read value once during the initializing. */
+        if (judge_state == 0xff)
+        {
+            result[0] = tfdb_get(&index->indexes[0], rw_buffer, &(cache->addr_cache[0]), rw_buffer_bak);
+            if (result[0] == TFDB_NO_ERR)
+            {
+                cache->seq[0] = (rw_buffer_bak[0] << 8) | (rw_buffer_bak[1]);
+                tfdb_memcpy(value_to, &(rw_buffer_bak[2]), index->indexes[0].value_length - 2);
+            }
+            else
+            {
+                cache->seq[0] = 0;
+            }
+
+            result[1] = tfdb_get(&index->indexes[1], rw_buffer, &(cache->addr_cache[1]), rw_buffer_bak);
+            if (result[1] == TFDB_NO_ERR)
+            {
+                cache->seq[1] = (rw_buffer_bak[0] << 8) | (rw_buffer_bak[1]);
+            }
+            else
+            {
+                cache->seq[1] = 0;
+            }
+
+            judge_state = tfdb_dual_judge(cache->seq);
+            if (judge_state == 1)
+            {
+                tfdb_memcpy(value_to, &(rw_buffer_bak[2]), index->indexes[1].value_length - 2);
+            }
+            else if (judge_state == 0xff)
+            {
+                rresult = TFDB_SEQ_ERR;
+            }
+        }
+        else
+        {
+            result[judge_state] = tfdb_get(&index->indexes[judge_state], rw_buffer, &(cache->addr_cache[judge_state]), rw_buffer_bak);
+            if (result[judge_state] == TFDB_NO_ERR)
+            {
+                tfdb_memcpy(value_to, &(rw_buffer_bak[2]), index->indexes[judge_state].value_length - 2);
+            }
+            else
+            {
+                /* block not right, read another block. */
+                judge_state = 1 - judge_state;
+                result[judge_state] = tfdb_get(&index->indexes[judge_state], rw_buffer, &(cache->addr_cache[judge_state]), rw_buffer_bak);
+                if (result[judge_state] == TFDB_NO_ERR)
+                {
+                    tfdb_memcpy(value_to, &(rw_buffer_bak[2]), index->indexes[judge_state].value_length - 2);
+                }
+                else
+                {
+                    /* two blocks are all not right, failed. */
+                    rresult = TFDB_READ_ERR;
+                }
+            }
+        }
+    }
+    else
+    {
+        rresult = TFDB_CACHE_ERR;
+    }
+
+    return rresult;
+
+}
+
+/**
+ * set data in flash and save the addr and seq to cache.
+ *
+ * @param index the data manage index.
+ * @param rw_buffer buffer to store prepared read data or write data.
+ * @param rw_buffer_bak buffer to store prepared read data or write data.
+ * @param cache the pointer to addr which is user offered, which will save read addr and seq.
+ * @param value_from the pointer to buffer which is user offered that need to save.
+ *
+ * @return TFDB_Err_Code
+ */
+TFDB_Err_Code tfdb_dual_set(const tfdb_dual_index_t *index, uint8_t *rw_buffer, uint8_t *rw_buffer_bak, tfdb_dual_cache_t *cache, void *value_from)
+{
+    TFDB_Err_Code rresult = TFDB_NO_ERR;
+    TFDB_Err_Code result[2];
+    uint8_t judge_state;
+    uint16_t write_seq;
+
+    if (cache != NULL)
+    {
+        judge_state = tfdb_dual_judge(cache->seq);
+
+        TFDB_DEBUG("tfdb_dual_judge:%d\n", judge_state);
+
+        /* usually, we just read value once during the initializing. */
+        if (judge_state != 0xff)
+        {
+write:
+            write_seq = tfdb_dual_get_next_seq(cache->seq[judge_state]);
+            judge_state = 1 - judge_state;  /* we need to write in another flash block. */
+
+            rw_buffer_bak[0] = (uint8_t)(write_seq >> 8);
+            rw_buffer_bak[1] = (uint8_t)write_seq;
+
+            tfdb_memcpy(&(rw_buffer_bak[2]), value_from, index->indexes[judge_state].value_length - 2);
+
+            result[judge_state] = tfdb_set(&index->indexes[judge_state], rw_buffer, &(cache->addr_cache[judge_state]), rw_buffer_bak);
+            if (result[judge_state] == TFDB_NO_ERR)
+            {
+                cache->seq[judge_state] = write_seq;
+            }
+            else
+            {
+                /* block is error, do not write to another block, for keeping the old data safe.
+                 * if you want to write in another block, please use tfdb_set directly. */
+                rresult = judge_state + TFDB_FLASH1_ERR;
+            }
+        }
+        else
+        {
+            result[0] = tfdb_get(&index->indexes[0], rw_buffer, &(cache->addr_cache[0]), rw_buffer_bak);
+            if (result[0] == TFDB_NO_ERR)
+            {
+                cache->seq[0] = (rw_buffer_bak[0] << 8) | (rw_buffer_bak[1]);
+            }
+            else
+            {
+                cache->seq[0] = 0;
+            }
+
+            result[1] = tfdb_get(&index->indexes[1], rw_buffer, &(cache->addr_cache[1]), rw_buffer_bak);
+            if (result[1] == TFDB_NO_ERR)
+            {
+                cache->seq[1] = (rw_buffer_bak[0] << 8) | (rw_buffer_bak[1]);
+            }
+            else
+            {
+                cache->seq[1] = 0;
+            }
+
+            judge_state = tfdb_dual_judge(cache->seq);
+            if (judge_state == 0xff)
+            {
+                judge_state = 0;    /* first write 0 block. */
+            }
+
+            goto write;
+        }
+    }
+    else
+    {
+        return TFDB_CACHE_ERR;
+    }
+
+    return rresult;
 }
