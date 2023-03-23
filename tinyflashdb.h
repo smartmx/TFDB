@@ -18,7 +18,7 @@
 
 #include "tfdb_port.h"
 
-#define TFDB_VERSION    "0.0.6"
+#define TFDB_VERSION    "0.0.7"
 
 typedef struct _tfdb_index_struct
 {
