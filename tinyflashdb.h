@@ -20,6 +20,12 @@
 
 #define TFDB_VERSION    "0.0.7"
 
+#define TFDB_ALIGNED_RW_BUFFER_SIZE(VALUE_LENGTH, ALIGNED_SIZE)             ((VALUE_LENGTH + 1 + ALIGNED_SIZE) / (ALIGNED_SIZE))
+
+#define TFDB_DUAL_ALIGNED_RW_BUFFER_SIZE(VALUE_LENGTH, ALIGNED_SIZE)        ((VALUE_LENGTH + 3 + ALIGNED_SIZE) / (ALIGNED_SIZE))
+
+#define TFDB_DUAL_VALUE_LENGTH(VALUE_LENGTH)                                (VALUE_LENGTH + 2)
+
 typedef struct _tfdb_index_struct
 {
     tfdb_addr_t     flash_addr;     /* the start address of the flash block */

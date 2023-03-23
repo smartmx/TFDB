@@ -24,7 +24,7 @@ const tfdb_index_t test_index = {
 };/* c99写法，如果编译器不支持，可自行改为c89写法 */
 tfdb_addr_t addr = 0; /*addr cache*/
 
-uint8_t test_buf[4]; /*aligned_value_size*/
+uint8_t test_buf[TFDB_ALIGNED_RW_BUFFER_SIZE(2,1)]; /*aligned_value_size*/
 
 uint16_t test_value;
 
@@ -114,13 +114,13 @@ tfdb_dual_index_t my_test_tfdb_dual = {
                 .end_byte     = 0x00,
                 .flash_addr   = 0x08077000,
                 .flash_size   = 256,
-                .value_length = sizeof(my_test_params_t) + 2,
+                .value_length = TFDB_DUAL_VALUE_LENGTH(sizeof(my_test_params_t)),
         },
         .indexes[1] = {
                 .end_byte     = 0x00,
                 .flash_addr   = 0x08077100,
                 .flash_size   = 256,
-                .value_length = sizeof(my_test_params_t) + 2,
+                .value_length = TFDB_DUAL_VALUE_LENGTH(sizeof(my_test_params_t)),
         },
 };
 
@@ -128,7 +128,8 @@ tfdb_dual_cache_t my_test_tfdb_dual_cache = {0};
 
 void my_test_tfdb_dual_func()
 {
-    uint32_t rw_buffer[32], rw_buffer_bak[32];
+    uint32_t rw_buffer[TFDB_DUAL_ALIGNED_RW_BUFFER_SIZE(TFDB_DUAL_VALUE_LENGTH(sizeof(my_test_params_t)), 4)];
+    uint32_t rw_buffer_bak[TFDB_DUAL_ALIGNED_RW_BUFFER_SIZE(TFDB_DUAL_VALUE_LENGTH(sizeof(my_test_params_t)), 4)];
     TFDB_Err_Code err;
     for(uint8_t i = 0; i < 36; i++)
     {
