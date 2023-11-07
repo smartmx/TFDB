@@ -172,25 +172,18 @@ start:
                     TFDB_DEBUG("    read err\n");
                     goto end;
                 }
-                if ((rw_buffer[aligned_value_size - 1] == (TFDB_VALUE_AFTER_ERASE & 0x000000ff)))
-                {
+                if ((rw_buffer[aligned_value_size - 1] == (TFDB_VALUE_AFTER_ERASE & 0x000000ff))
 #if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
-                    if ((rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE >> 8) & 0x000000ff)))
-                    {
+                    && (rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE >> 8) & 0x000000ff))
 #endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
 #if TFDB_VALUE_AFTER_ERASE_SIZE == 4
-                        if ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE >> 16) & 0x000000ff)) &&
+                        && ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE >> 16) & 0x000000ff)) &&
                                 (rw_buffer[aligned_value_size - 4] == ((TFDB_VALUE_AFTER_ERASE >> 24) & 0x000000ff)))
-                        {
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
-                            /* find value addr success */
-                            break;
-#if TFDB_VALUE_AFTER_ERASE_SIZE == 4
-                        }
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
-#if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
-                    }
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */       
+                )
+                {
+                    /* find value addr success */
+                    break;
                 }
                 else
                 {
