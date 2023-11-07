@@ -11,6 +11,7 @@
  * 2022-03-15     smartmx      fix bugs, add support for stm32l4 flash
  * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
  * 2023-02-22     smartmx      add dual flash index function
+ * 2023-11-07     smartmx      add TFDB_LOG macro.
  *
  */
 #ifndef _TINY_FLASH_DB_H_
