@@ -11,6 +11,7 @@
  * 2022-03-15     smartmx      fix bugs, add support for stm32l4 flash
  * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
  * 2023-02-22     smartmx      add dual flash index function
+ * 2023-11-07     smartmx      fix bugs, tfdb_get error when flash write in tfdb_set not success.
  *
  */
 #include "tinyflashdb.h"
@@ -147,7 +148,7 @@ TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
     /* aligned with TFDB_WRITE_UNIT_BYTES */
     aligned_value_size = ((aligned_value_size + 7) & 0xf8);
 #endif
-    TFDB_DEBUG("aigned size:%d\n", aligned_value_size);
+    TFDB_LOG("aigned size:%d\n", aligned_value_size);
 
     if (addr_cache == NULL)
     {
@@ -171,25 +172,18 @@ start:
                     TFDB_DEBUG("    read err\n");
                     goto end;
                 }
-                if ((rw_buffer[aligned_value_size - 1] == (TFDB_VALUE_AFTER_ERASE & 0x000000ff)))
-                {
+                if ((rw_buffer[aligned_value_size - 1] == (TFDB_VALUE_AFTER_ERASE & 0x000000ff))
 #if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
-                    if ((rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE >> 8) & 0x000000ff)))
-                    {
+                    && (rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE >> 8) & 0x000000ff))
 #endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
 #if TFDB_VALUE_AFTER_ERASE_SIZE == 4
-                        if ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE >> 16) & 0x000000ff)) &&
+                        && ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE >> 16) & 0x000000ff)) &&
                                 (rw_buffer[aligned_value_size - 4] == ((TFDB_VALUE_AFTER_ERASE >> 24) & 0x000000ff)))
-                        {
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
-                            /* find value addr success */
-                            break;
-#if TFDB_VALUE_AFTER_ERASE_SIZE == 4
-                        }
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
-#if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
-                    }
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
+#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */       
+                )
+                {
+                    /* find value addr success */
+                    break;
                 }
                 else
                 {
@@ -203,7 +197,7 @@ start:
                 goto init;
             }
             /* find the addr success */
-            TFDB_DEBUG("    find success\n");
+            TFDB_LOG("    find success\n");
 set:
             /* calculate sum verify */
             sum_verify_byte = 0;
@@ -309,7 +303,7 @@ init:
         }
     }
 end:
-    TFDB_DEBUG("tfdb_set:%d\n", result);
+    TFDB_LOG("tfdb_set:%d\n", result);
     return result;
 }
 
@@ -330,7 +324,7 @@ TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
     uint8_t aligned_value_size;
     uint8_t sum_verify_byte;
     uint8_t i;
-    TFDB_DEBUG("tfdb_get >\n");
+    TFDB_LOG("tfdb_get >\n");
 
     aligned_value_size  = index->value_length + 2;/* data + verify + end_byte */
 
@@ -344,7 +338,7 @@ TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
     /* aligned with TFDB_WRITE_UNIT_BYTES */
     aligned_value_size = ((aligned_value_size + 7) & 0xf8);
 #endif
-    TFDB_DEBUG("aigned size:%d\n", aligned_value_size);
+    TFDB_LOG("aigned size:%d\n", aligned_value_size);
 
     if (addr_cache == NULL)
     {
@@ -355,11 +349,13 @@ start:
         {
             /* the header is right. so start to find data location address in flash. */
 #if (TFDB_WRITE_UNIT_BYTES==8)
-            find_addr = index->flash_addr + 8;
+            find_addr = index->flash_addr + index->flash_size - ((index->flash_size - 8) % aligned_value_size) - aligned_value_size;
+            TFDB_LOG("find_addr start:0x%08x\n", find_addr);
+            while ((find_addr) >= (index->flash_addr + 8))
 #else
-            find_addr = index->flash_addr + 4;
+            find_addr = index->flash_addr + index->flash_size - ((index->flash_size - 4) % aligned_value_size) - aligned_value_size;
+            while ((find_addr) >= (index->flash_addr + 4))
 #endif
-            while ((find_addr) <= (index->flash_size + index->flash_addr - aligned_value_size))
             {
                 /* start to find value */
                 result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
@@ -368,43 +364,22 @@ start:
                     TFDB_DEBUG("    read err\n");
                     goto end;
                 }
-                if ((rw_buffer[aligned_value_size - 1] == (TFDB_VALUE_AFTER_ERASE & 0x000000ff)))
+                if (rw_buffer[aligned_value_size - 1] == index->end_byte)
                 {
-#if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
-                    if ((rw_buffer[aligned_value_size - 2] == ((TFDB_VALUE_AFTER_ERASE >> 8) & 0x000000ff)))
-                    {
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
-#if TFDB_VALUE_AFTER_ERASE_SIZE == 4
-                        if ((rw_buffer[aligned_value_size - 3] == ((TFDB_VALUE_AFTER_ERASE >> 16) & 0x000000ff)) &&
-                                (rw_buffer[aligned_value_size - 4] == ((TFDB_VALUE_AFTER_ERASE >> 24) & 0x000000ff)))
-                        {
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
-                            /* find value addr success */
-                            break;
-#if TFDB_VALUE_AFTER_ERASE_SIZE == 4
-                        }
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 4 */
-#if (TFDB_VALUE_AFTER_ERASE_SIZE == 2)||(TFDB_VALUE_AFTER_ERASE_SIZE == 4)
-                    }
-#endif  /* TFDB_VALUE_AFTER_ERASE_SIZE == 2 */
+                    /* find value addr success */
+                    break;
+                }
+
+                if(find_addr >= aligned_value_size)
+                {
+                    find_addr -= aligned_value_size;
                 }
                 else
                 {
-                    /* some flash bits maybe bad, can't write. */
-                    find_addr += aligned_value_size;
+                    break;
                 }
             }
-            find_addr = find_addr - aligned_value_size;
-            if ((find_addr) <= (index->flash_size + index->flash_addr - (2 * aligned_value_size)))
-            {
-                /* the flash block is not fill. And if it's fill, the data in rw_buffer is what we need. */
-                result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
-                if (result != TFDB_NO_ERR)
-                {
-                    TFDB_DEBUG("    read err\n");
-                    goto end;
-                }
-            }
+
 verify:
             sum_verify_byte = 0;
             /* calculate sum verify */
@@ -416,14 +391,14 @@ verify:
                     || (rw_buffer[aligned_value_size - 1] != index->end_byte))
             {
                 /* not right data, maybe the flash is broken. */
-                TFDB_DEBUG("verify err:%02x,%02x,end:%02x\n", sum_verify_byte, rw_buffer[index->value_length], rw_buffer[aligned_value_size - 1]);
-                find_addr = find_addr - aligned_value_size;
+                TFDB_LOG("verify err:%02x,%02x,end:%02x\n", sum_verify_byte, rw_buffer[index->value_length], rw_buffer[aligned_value_size - 1]);
 #if (TFDB_WRITE_UNIT_BYTES==8)
-                if (find_addr >= (index->flash_addr + 8))
+                if (find_addr >= (index->flash_addr + 8 + aligned_value_size))
 #else
-                if (find_addr >= (index->flash_addr + 4))
+                if (find_addr >= (index->flash_addr + 4 + aligned_value_size))
 #endif
                 {
+                    find_addr = find_addr - aligned_value_size;
                     result = tfdb_port_read(find_addr, rw_buffer, aligned_value_size);
                     if (result != TFDB_NO_ERR)
                     {
@@ -477,7 +452,7 @@ verify:
         }
     }
 end:
-    TFDB_DEBUG("tfdb_get:%d\n", result);
+    TFDB_LOG("tfdb_get:%d\n", result);
     return result;
 }
 

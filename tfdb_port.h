@@ -51,6 +51,8 @@ typedef enum
 
 #define TFDB_DEBUG                          printf
 
+#define TFDB_LOG                            printf
+
 /* The data value in flash after erased, most are 0xff, some flash maybe different.
  * if it's over 1 byte, please be care of little endian or big endian. */
 #define TFDB_VALUE_AFTER_ERASE              0xff
