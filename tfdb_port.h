@@ -32,6 +32,8 @@ typedef enum
     TFDB_SEQ_ERR,
     TFDB_FLASH1_ERR,
     TFDB_FLASH2_ERR,
+    TFDB_NO_DATA,
+    TFDB_NO_PRE_DATA,
     TFDB_ERR_MAX,
 } TFDB_Err_Code;
 

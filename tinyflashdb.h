@@ -38,6 +38,8 @@ typedef struct _tfdb_index_struct
 
 extern TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, void *value_to);
 
+extern TFDB_Err_Code tfdb_get_pre(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, tfdb_addr_t *pre_addr_cache, void *value_to);
+
 extern TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, void *value_from);
 
 typedef struct _tfdb_dual_index_struct
