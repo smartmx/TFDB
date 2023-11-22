@@ -366,7 +366,7 @@ verify:
                 goto read_next;
             }
 
-            sum_verify_byte = 0;
+            sum_verify_byte = 0xff;
             /* calculate sum verify */
             for (i = 0; i < index->value_length; i++)
             {
