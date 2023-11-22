@@ -174,7 +174,7 @@ start:
             TFDB_LOG("    find success\n");
 set:
             /* calculate sum verify */
-            sum_verify_byte = 0;
+            sum_verify_byte = 0xff;
             for (i = 0; i < index->value_length; i++)
             {
                 sum_verify_byte = ((sum_verify_byte + ((uint8_t *)(value_from))[i]) & 0xff);
