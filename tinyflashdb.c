@@ -247,6 +247,7 @@ init:
             result = tfdb_init(index, rw_buffer);
             if (result == TFDB_NO_ERR)
             {
+after_init:
 #if (TFDB_WRITE_UNIT_BYTES==8)
                 find_addr = index->flash_addr + 8;
 #else
@@ -255,6 +256,10 @@ init:
                 goto set;
             }
             goto end;
+        }
+        else if (result == TFDB_NO_DATA)
+        {
+            goto after_init;
         }
     }
     else
