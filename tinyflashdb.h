@@ -12,6 +12,7 @@
  * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
  * 2023-02-22     smartmx      add dual flash index function
  * 2023-11-07     smartmx      add TFDB_LOG macro.
+ * 2026-09-21     smartmx      add tfdb_dual_get_pre function and TFDB_DUAL_SEQ_COUNT option.
  *
  */
 #ifndef _TINY_FLASH_DB_H_
@@ -19,7 +20,7 @@
 
 #include "tfdb_port.h"
 
-#define TFDB_VERSION    "0.0.7"
+#define TFDB_VERSION    "0.0.8"
 
 #define TFDB_MAX(A, B)  (((A) > (B)) ? (A) : (B))
 
@@ -64,6 +65,8 @@ typedef struct _tfdb_dual_cache_struct
 } tfdb_dual_cache_t;
 
 extern TFDB_Err_Code tfdb_dual_get(const tfdb_dual_index_t *index, uint8_t *rw_buffer, uint8_t *rw_buffer_bak, tfdb_dual_cache_t *cache, void *value_to);
+
+extern TFDB_Err_Code tfdb_dual_get_pre(const tfdb_dual_index_t *index, uint8_t *rw_buffer, uint8_t *rw_buffer_bak, tfdb_dual_cache_t *cache, tfdb_dual_cache_t *pre_cache, void *value_to);
 
 extern TFDB_Err_Code tfdb_dual_set(const tfdb_dual_index_t *index, uint8_t *rw_buffer, uint8_t *rw_buffer_bak, tfdb_dual_cache_t *cache, void *value_from);
 

@@ -11,6 +11,7 @@
  * 2022-03-15     smartmx      fix bugs, add support for stm32l4 flash
  * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
  * 2023-02-22     smartmx      add dual flash index function
+ * 2026-09-21     smartmx      add TFDB_DUAL_SEQ_COUNT option for dual seq cycle.
  *
  */
 #ifndef _TFDB_PORT_H_
@@ -73,6 +74,17 @@ typedef enum
 
 /* @note the max retry times when flash is error ,set 0 will disable retry count */
 #define TFDB_WRITE_MAX_RETRY                32
+
+/* the dual seq cycle value count, only support 3 or 5, must be an odd number.
+ * 3: 0x00ff -> 0x0ff0 -> 0xff00
+ * 5: 0xff00 -> 0xf0f0 -> 0x0ff0 -> 0x0f0f -> 0x00ff
+ * @note the two value sets are not compatible with each other,
+ * switching needs the dual flash blocks re-initialized. */
+#define TFDB_DUAL_SEQ_COUNT                 3
+
+#if (TFDB_DUAL_SEQ_COUNT!=3) && (TFDB_DUAL_SEQ_COUNT!=5)
+#error "TFDB_DUAL_SEQ_COUNT only support 3 or 5."
+#endif
 
 /* must not use pointer type. Please use uint32_t, uint16_t or uint8_t. */
 typedef uint32_t    tfdb_addr_t;

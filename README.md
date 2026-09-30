@@ -73,9 +73,25 @@ TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
 
 参数 `addr_cache`：可以是`NULL`，或者是地址缓存变量的指针，当`addr_cache`不为`NULL`，并且也不为0时，则认为`addr_cache`已经初始化成功，不再校验flash头部，直接从该`addr_cache`的地址读取数据。  
 
-参数 `value_to`：要存储数据内容的地址。  
+参数 `value_to`：要存储数据内容的地址。
 
-返回值：`TFDB_NO_ERR`成功，其他失败。  
+返回值：`TFDB_NO_ERR`成功，其他失败。
+
+```c
+TFDB_Err_Code tfdb_get_pre(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, tfdb_addr_t *pre_addr_cache, void* value_to);
+```
+
+函数功能：从`index`指向的扇区中获取比当前最新数据更早的一条有效数据（即上一次保存的数据），flash头部数据校验出错不会重新初始化flash。
+
+当前数据所在地址的前一个位置的数据校验失败时，会继续向前回退查找，直到找到一条有效数据，或者没有更早的数据（返回`TFDB_NO_PRE_DATA`）。
+
+参数 `index`、`rw_buffer`、`value_to`：与`tfdb_get`相同。
+
+参数 `addr_cache`：与`tfdb_get`相同。为`NULL`或0时会先自动获取最新数据的地址（此时`value_to`会先保存最新数据，找到上一次保存的数据后会被覆盖）。
+
+参数 `pre_addr_cache`：可以是`NULL`，或者是地址缓存变量的指针。函数成功后，上一次保存的数据的地址会保存到该变量，可用于之后直接读取该条数据。
+
+返回值：`TFDB_NO_ERR`成功，`TFDB_NO_PRE_DATA`没有更早的数据，其他失败。
 
 ```c
 TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, void* value_from);
@@ -217,9 +233,29 @@ TFDB_Err_Code tfdb_dual_set(const tfdb_dual_index_t *index, uint8_t *rw_buffer, 
 
 参数 `cache`：不可以是`NULL`，必须是`tfdb_dual_cache_t`定义的缓存的指针，当`cache`中数据合法时，则认为`cache`已经初始化成功，直接从该`cache`的flash块和地址读取数据。  
 
-参数 `value_from`：要存储的数据内容。  
+参数 `value_from`：要存储的数据内容。
 
-返回值：`TFDB_NO_ERR`成功，其他失败。  
+返回值：`TFDB_NO_ERR`成功，其他失败。
+
+```c
+TFDB_Err_Code tfdb_dual_get_pre(const tfdb_dual_index_t *index, uint8_t *rw_buffer, uint8_t *rw_buffer_bak, tfdb_dual_cache_t *cache, tfdb_dual_cache_t *pre_cache, void *value_to);
+```
+
+函数功能：获取比当前最新数据更早的一条有效数据（即上一次保存的数据），作用与单块模式下的`tfdb_get_pre`相同。
+
+dual模式下两次写入分别位于两个flash块中，所以上一次保存的数据通常在另一个flash块中，为该块中最新的记录。当该记录损坏时（例如写入时意外断电），会自动回退到当前数据所在flash块中的上一条有效记录，返回可以读取到的最新的较早数据。
+
+参数 `index`：tfdb操作的index指针。
+
+参数 `rw_buffer`、`rw_buffer_bak`：与`tfdb_dual_get`相同的写入和读取缓存。
+
+参数 `cache`：不可以是`NULL`，必须是`tfdb_dual_cache_t`定义的缓存的指针。当`cache`未初始化时，会像`tfdb_dual_get`一样先读取两个flash块初始化`cache`，此时`value_to`会先保存最新数据，找到上一次保存的数据后会被覆盖。
+
+参数 `pre_cache`：可以是`NULL`，或者是`tfdb_dual_cache_t`定义的缓存的指针。函数成功后，上一次保存的数据的地址和seq会被保存到对应flash块的表项中，其余表项清零，可用于之后直接读取该条数据。
+
+参数 `value_to`：要保存数据内容的地址。
+
+返回值：`TFDB_NO_ERR`成功，`TFDB_NO_PRE_DATA`没有更早的数据，其他失败。
 
 ## TinyFlashDB设计原理
 
@@ -258,9 +294,11 @@ Flash初始化后头部信息为4字节，所以只支持1、2、4、8字节操�
 
 ## TinyFlashDB dual设计原理
 
-数据前部两字节seq只有3种合法值，0x00ff->0x0ff0->0xff00。  
+数据前部两字节seq的合法值由`TFDB_DUAL_SEQ_COUNT`决定：默认为3种（0x00ff->0x0ff0->0xff00），可配置为5种（0xff00->0xf0f0->0x0ff0->0x0f0f->0x00ff）。  
 如此循环往复，通过读取两个block中最新变量的seq来判断哪个flash扇区中存储的是最新值。  
-当最新值存储在第一扇区时，下次写入则会在第二扇区写入，反之亦然。
+当最新值存储在第一扇区时，下次写入则会在第二扇区写入，反之亦然。  
+5值循环将`tfdb_dual_get_pre`的判别窗口从3次写入扩大到5次写入，两块中需要更多条连续损坏记录才会出现判别歧义；两套值集互不兼容，切换配置前需擦除重新初始化两个flash块，否则会返回`TFDB_SEQ_ERR`。  
+`tfdb_dual_get_pre`通过seq在循环中的前后关系，比较两个候选记录（另一扇区中最新的记录，和当前扇区中的上一条有效记录）哪个是上一次保存的数据，即使其中一条候选记录损坏，也能返回可以读取到的最新的较早数据。  
 
 ## TinyFlashDB移植和配置
 
@@ -307,6 +345,13 @@ TFDB_Err_Code tfdb_port_write(tfdb_addr_t addr, const uint8_t *buf, size_t size)
 
 /* @note the max retry times when flash is error ,set 0 will disable retry count */
 #define TFDB_WRITE_MAX_RETRY                32
+
+/* the dual seq cycle value count, only support 3 or 5, must be an odd number.
+ * 3: 0x00ff -> 0x0ff0 -> 0xff00
+ * 5: 0xff00 -> 0xf0f0 -> 0x0ff0 -> 0x0f0f -> 0x00ff
+ * @note the two value sets are not compatible with each other,
+ * switching needs the dual flash blocks re-initialized. */
+#define TFDB_DUAL_SEQ_COUNT                 3
 
 /* must not use pointer type. Please use uint32_t, uint16_t or uint8_t. */
 typedef uint32_t    tfdb_addr_t;

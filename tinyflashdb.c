@@ -12,6 +12,7 @@
  * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
  * 2023-02-22     smartmx      add dual flash index function
  * 2023-11-07     smartmx      fix bugs, tfdb_get error when flash write in tfdb_set not success.
+ * 2026-09-21     smartmx      add tfdb_dual_get_pre function and TFDB_DUAL_SEQ_COUNT option.
  *
  */
 #include "tinyflashdb.h"
@@ -537,63 +538,38 @@ end:
 }
 
 /**
- * judge which seq is new.
- *
- * @param seq the pointer to seq[2] buffer.
- *
- * @return uint8_t which seq is new, 0xff means all seq is illegal.
- */
-static uint8_t tfdb_dual_judge(uint16_t *seq)
-{
-    /* seq range: 0x00ff -> 0x0ff0 -> 0xff00 */
-    switch (seq[0])
-    {
-    case 0xff00:
-        if (seq[1] == 0x00ff)
-        {
-            return 1;
-        }
-        else
-        {
-            return 0;
-        }
-    case 0x0ff0:
-        if (seq[1] == 0xff00)
-        {
-            return 1;
-        }
-        else
-        {
-            return 0;
-        }
-    case 0x00ff:
-        if (seq[1] == 0x0ff0)
-        {
-            return 1;
-        }
-        else
-        {
-            return 0;
-        }
-    default:
-        if ((seq[1] == 0x00ff) || (seq[1] == 0x0ff0) || (seq[1] == 0xff00))
-        {
-            return 1;
-        }
-        break;
-    }
-    return 0xff;
-}
-
-/**
  * get next seq from given seq.
  *
- * @param seq the pointer to seq[2] buffer.
+ * @param seq the current seq value.
  *
- * @return uint8_t which seq is new, 0xff means all seq is illegal.
+ * @return uint16_t the next seq value in the cycle,
+ *         the unknown value returns the first value of the cycle.
  */
 static uint16_t tfdb_dual_get_next_seq(uint16_t seq)
 {
+#if (TFDB_DUAL_SEQ_COUNT==5)
+    /* seq range: 0xff00 -> 0xf0f0 -> 0x0ff0 -> 0x0f0f -> 0x00ff */
+    if (seq == 0xff00)
+    {
+        return 0xf0f0;
+    }
+    else if (seq == 0xf0f0)
+    {
+        return 0x0ff0;
+    }
+    else if (seq == 0x0ff0)
+    {
+        return 0x0f0f;
+    }
+    else if (seq == 0x0f0f)
+    {
+        return 0x00ff;
+    }
+    else
+    {
+        return 0xff00;
+    }
+#else
     /* seq range: 0x00ff -> 0x0ff0 -> 0xff00 */
     if (seq == 0x00ff)
     {
@@ -607,6 +583,83 @@ static uint16_t tfdb_dual_get_next_seq(uint16_t seq)
     {
         return 0x00ff;
     }
+#endif
+}
+
+/**
+ * check the seq value is a legal cycle value or not.
+ *
+ * @param seq the seq value which need to be checked.
+ *
+ * @return uint8_t 1 is legal, 0 is illegal.
+ */
+static uint8_t tfdb_dual_seq_valid(uint16_t seq)
+{
+    uint16_t cycle_seq;
+    uint8_t i;
+
+    /* all the legal values can be found by walking the cycle from the first value. */
+    cycle_seq = tfdb_dual_get_next_seq(0);
+    for (i = 0; i < TFDB_DUAL_SEQ_COUNT; i++)
+    {
+        if (cycle_seq == seq)
+        {
+            return 1;
+        }
+        cycle_seq = tfdb_dual_get_next_seq(cycle_seq);
+    }
+    return 0;
+}
+
+/**
+ * judge which seq is new.
+ *
+ * @param seq the pointer to seq[2] buffer.
+ *
+ * @return uint8_t which seq is new, 0xff means all seq is illegal.
+ */
+static uint8_t tfdb_dual_judge(uint16_t *seq)
+{
+    /* the seq of the newer block is the next of the older one in the cycle. */
+    if (tfdb_dual_seq_valid(seq[0]) != 0)
+    {
+        return (tfdb_dual_get_next_seq(seq[0]) == seq[1]) ? 1 : 0;
+    }
+    if (tfdb_dual_seq_valid(seq[1]) != 0)
+    {
+        return 1;
+    }
+    return 0xff;
+}
+
+/**
+ * rank the seq by the backward distance to the current seq in the seq cycle.
+ *
+ * @param current_seq the seq value of the current latest data.
+ * @param seq the seq value which need to be ranked.
+ *
+ * @return uint8_t 1 ~ (TFDB_DUAL_SEQ_COUNT - 1): the seq value is some steps before the current seq,
+ *         TFDB_DUAL_SEQ_COUNT: the same seq value to the current seq,
+ *         (TFDB_DUAL_SEQ_COUNT + 1): illegal seq value.
+ */
+static uint8_t tfdb_dual_seq_rank(uint16_t current_seq, uint16_t seq)
+{
+    uint8_t i;
+
+    if (tfdb_dual_seq_valid(seq) == 0)
+    {
+        /* illegal seq value, keep the lowest priority. */
+        return TFDB_DUAL_SEQ_COUNT + 1;
+    }
+    for (i = 1; i <= TFDB_DUAL_SEQ_COUNT; i++)
+    {
+        seq = tfdb_dual_get_next_seq(seq);
+        if (seq == current_seq)
+        {
+            return i;
+        }
+    }
+    return TFDB_DUAL_SEQ_COUNT + 1;
 }
 
 /**
@@ -684,6 +737,186 @@ TFDB_Err_Code tfdb_dual_get(const tfdb_dual_index_t *index, uint8_t *rw_buffer, 
         rresult = TFDB_CACHE_ERR;
     }
 
+    return rresult;
+}
+
+/**
+ * get the previous data in dual flash blocks and save the addr and seq of it to pre_cache.
+ *
+ * The previous data is the newest valid record older than the current latest one.
+ * It is usually the latest record in another flash block, when that record is broken,
+ * the previous valid record in the same block of the latest one will be used.
+ *
+ * @param index the data manage index.
+ * @param rw_buffer buffer to store prepared read data or write data.
+ * @param rw_buffer_bak buffer to store prepared read data or write data.
+ * @param cache the pointer to cache which is user offered, which saves the read addr and seq.
+ * @param pre_cache the pointer to cache which is user offered, which will save the previous data addr and seq, can be NULL.
+ * @param value_to the pointer to buffer which is user offered to save data.
+ *
+ * @return TFDB_Err_Code
+ */
+TFDB_Err_Code tfdb_dual_get_pre(const tfdb_dual_index_t *index, uint8_t *rw_buffer, uint8_t *rw_buffer_bak, tfdb_dual_cache_t *cache, tfdb_dual_cache_t *pre_cache, void *value_to)
+{
+    TFDB_Err_Code rresult;
+    TFDB_Err_Code result[2];
+    uint8_t judge_state;
+    uint8_t current_block;
+    uint8_t pre_block;
+    uint16_t current_seq;
+    uint16_t seq[2];
+    tfdb_addr_t pre_addr;
+    uint8_t rank[2];
+    uint8_t i;
+
+    TFDB_LOG("tfdb_dual_get_pre >\n");
+
+    if (cache == NULL)
+    {
+        return TFDB_CACHE_ERR;
+    }
+
+    judge_state = tfdb_dual_judge(cache->seq);
+
+    TFDB_DEBUG("tfdb_dual_judge:%d\n", judge_state);
+
+    /* usually, we just read value once during the initializing. */
+    if (judge_state == 0xff)
+    {
+        result[0] = tfdb_get(&index->indexes[0], rw_buffer, &(cache->addr_cache[0]), rw_buffer_bak);
+        if (result[0] == TFDB_NO_ERR)
+        {
+            cache->seq[0] = (rw_buffer_bak[0] << 8) | (rw_buffer_bak[1]);
+            if (value_to != NULL)
+            {
+                tfdb_memcpy(value_to, &(rw_buffer_bak[2]), index->indexes[0].value_length - 2);
+            }
+        }
+        else
+        {
+            cache->seq[0] = 0;
+        }
+
+        result[1] = tfdb_get(&index->indexes[1], rw_buffer, &(cache->addr_cache[1]), rw_buffer_bak);
+        if (result[1] == TFDB_NO_ERR)
+        {
+            cache->seq[1] = (rw_buffer_bak[0] << 8) | (rw_buffer_bak[1]);
+        }
+        else
+        {
+            cache->seq[1] = 0;
+        }
+
+        judge_state = tfdb_dual_judge(cache->seq);
+        if (judge_state == 1)
+        {
+            if (value_to != NULL)
+            {
+                tfdb_memcpy(value_to, &(rw_buffer_bak[2]), index->indexes[1].value_length - 2);
+            }
+        }
+        else if (judge_state == 0xff)
+        {
+            rresult = TFDB_SEQ_ERR;
+            goto end;
+        }
+    }
+
+    /* the latest data is in the current block, find the two candidates of the previous data:
+     * candidate 1: the previous valid record in the current block.
+     * candidate 0: the latest valid record in another block. */
+    current_block = judge_state;
+    current_seq = cache->seq[current_block];
+
+    pre_addr = 0;
+    result[1] = tfdb_get_pre(&index->indexes[current_block], rw_buffer, &(cache->addr_cache[current_block]), &pre_addr, rw_buffer_bak);
+    if (result[1] == TFDB_NO_ERR)
+    {
+        seq[1] = (rw_buffer_bak[0] << 8) | (rw_buffer_bak[1]);
+        if (value_to != NULL)
+        {
+            /* save candidate 1 to value_to first, it will be covered if candidate 0 is selected. */
+            tfdb_memcpy(value_to, &(rw_buffer_bak[2]), index->indexes[current_block].value_length - 2);
+        }
+    }
+
+    result[0] = tfdb_get(&index->indexes[1 - current_block], rw_buffer, &(cache->addr_cache[1 - current_block]), rw_buffer_bak);
+    if (result[0] == TFDB_NO_ERR)
+    {
+        seq[0] = (rw_buffer_bak[0] << 8) | (rw_buffer_bak[1]);
+    }
+
+    /* rank the two candidates by the backward distance to the current seq in the seq cycle,
+     * the smaller rank is the newer one:
+     * rank 1 ~ (TFDB_DUAL_SEQ_COUNT - 1): the seq value is some steps before the current seq.
+     * rank TFDB_DUAL_SEQ_COUNT: the same seq value to the current seq, at least a full cycle before.
+     * rank (TFDB_DUAL_SEQ_COUNT + 1): illegal seq value, keep the lowest priority.
+     * rank 0xff: the candidate does not exist. */
+    for (i = 0; i < 2; i++)
+    {
+        if (result[i] != TFDB_NO_ERR)
+        {
+            rank[i] = 0xff;
+        }
+        else
+        {
+            rank[i] = tfdb_dual_seq_rank(current_seq, seq[i]);
+        }
+    }
+
+    if ((rank[0] == 0xff) && (rank[1] == 0xff))
+    {
+        if ((result[1] != TFDB_NO_PRE_DATA) && (result[1] != TFDB_NO_DATA))
+        {
+            /* the flash block of the latest data is broken. */
+            rresult = result[1];
+        }
+        else if ((result[0] != TFDB_NO_DATA) && (result[0] != TFDB_HDR_ERR))
+        {
+            rresult = result[0];
+        }
+        else
+        {
+            /* no older valid record in both blocks. */
+            rresult = TFDB_NO_PRE_DATA;
+        }
+        goto end;
+    }
+
+    if (rank[0] <= rank[1])
+    {
+        /* the latest record in another block is the previous data, and it wins when the
+         * ranks are the same, because the two blocks are written alternately, the record
+         * in another block is newer when both candidates have the same seq value. */
+        pre_block = 1 - current_block;
+        pre_addr = cache->addr_cache[pre_block];
+        if (value_to != NULL)
+        {
+            tfdb_memcpy(value_to, &(rw_buffer_bak[2]), index->indexes[pre_block].value_length - 2);
+        }
+    }
+    else
+    {
+        /* the record before the latest one in the current block is the previous data,
+         * which has been saved to value_to. */
+        pre_block = current_block;
+    }
+
+    TFDB_DEBUG("    pre block:%d\n", pre_block);
+
+    if (pre_cache != NULL)
+    {
+        pre_cache->addr_cache[0] = 0;
+        pre_cache->addr_cache[1] = 0;
+        pre_cache->seq[0] = 0;
+        pre_cache->seq[1] = 0;
+        pre_cache->addr_cache[pre_block] = pre_addr;
+        pre_cache->seq[pre_block] = (pre_block == current_block) ? seq[1] : seq[0];
+    }
+
+    rresult = TFDB_NO_ERR;
+end:
+    TFDB_LOG("tfdb_dual_get_pre:%d\n", rresult);
     return rresult;
 }
 
