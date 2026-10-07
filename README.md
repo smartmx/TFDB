@@ -11,7 +11,7 @@
 
 不同于其他很多的KV型数据库，TinyFlashDB每一个需要存储的变量都会分配一个单独的单片机flash扇区，变量长度不可变。  
 所以TinyFlashDB仅适用于存储几个关键性变量（例如：IAP跳转标志、系统断电时间等等），不适合大规模数据存储（大规模数据存储可使用EASYFLASH等）。  
-TinyFlashDB在设计时就考虑了写入错误的影响，追求力所能及的安全保障、资源占用方面尽可能的缩小（不到1kb代码占用）、尽可能的通用性（可以移植到51等8位机，无法逆序写入的stm32L4系列，某些flash加密的单片机和其他普通32位机上）。  
+TinyFlashDB在设计时就考虑了写入错误的影响，追求力所能及的安全保障、资源占用方面尽可能的缩小（单块模式代码占用不到1kb）、尽可能的通用性（可以移植到51等8位机，无法逆序写入的stm32L4系列，某些flash加密的单片机和其他普通32位机上）。  
 
 ## TinyFlashDB使用示例
 
@@ -111,7 +111,7 @@ TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
 
 ## TinyFlashDB dual使用示例
 
-tfdb dual api是基于`tfdb_set`和`tfdb_get`封装而成的。`tfdb dual`会调用`tfdb_set`和`tfdb_get`，并且在数据前部添加两个字节的seq，所以在tfdb dual中，最长支持的存储变量长度为253字节。  
+tfdb dual api是基于`tfdb_set`和`tfdb_get`封装而成的。`tfdb dual`会调用`tfdb_set`和`tfdb_get`，并且在数据前部添加两个字节的seq，所以tfdb dual最长支持253字节的用户数据。`value_length`配置过大或flash块容量不足以存放对齐后的记录时，API调用会返回`TFDB_CFG_ERR`，各粒度与块容量对应的上限见设计原理章节。  
 同时，tfdb dual api需要提供两个缓冲区，并且需要是增加两字节变量长度再重新计算的`aligned_value_size`。
 
 ```c
@@ -270,19 +270,43 @@ Flash初始化后头部信息为4字节，所以只支持1、2、4、8字节操�
 数据存储时，会根据flash支持的字节操作进行对齐，所以函数中`rw_buffer`指向的数据第二要求至少为下面函数中计算得出的`aligned_value_size`个字节：
 
 ```c
-    aligned_value_size  = index->value_length + 2;/* data + verify + end_byte */
- 
+/* in tinyflashdb.c */
+static uint16_t tfdb_aligned_size(const tfdb_index_t *index)
+{
+    uint16_t aligned_value_size;
+
+    aligned_value_size = (uint16_t)(index->value_length + 2);/* data + verify + end_byte */
+
 #if (TFDB_WRITE_UNIT_BYTES==2)
     /* aligned with TFDB_WRITE_UNIT_BYTES */
-    aligned_value_size = ((aligned_value_size + 1) & 0xfe);
+    aligned_value_size = (uint16_t)((aligned_value_size + 1) & ~(TFDB_WRITE_UNIT_BYTES - 1));
 #elif (TFDB_WRITE_UNIT_BYTES==4)
     /* aligned with TFDB_WRITE_UNIT_BYTES */
-    aligned_value_size = ((aligned_value_size + 3) & 0xfc);
+    aligned_value_size = (uint16_t)((aligned_value_size + 3) & ~(TFDB_WRITE_UNIT_BYTES - 1));
 #elif (TFDB_WRITE_UNIT_BYTES==8)
     /* aligned with TFDB_WRITE_UNIT_BYTES */
-    aligned_value_size = ((aligned_value_size + 7) & 0xf8);
+    aligned_value_size = (uint16_t)((aligned_value_size + 7) & ~(TFDB_WRITE_UNIT_BYTES - 1));
 #endif
+
+#if (TFDB_WRITE_UNIT_BYTES==8)
+    if (aligned_value_size > index->flash_size - 8)
+#else
+    if (aligned_value_size > index->flash_size - 4)
+#endif
+    {
+        /* the value can not be stored in this flash block. */
+        return 0;
+    }
+    return aligned_value_size;
+}
 ```
+
+`aligned_value_size`按写入粒度对齐，按16位计算最大可达264，不会再溢出；`value_length`最大为255（受其自身的8位长度限制），dual模式最长支持253字节用户数据。同时flash块必须至少能容纳一条记录（头部4字节，8字节粒度为8字节，加`aligned_value_size`不能超过`flash_size`），否则`tfdb_set`、`tfdb_get`、`tfdb_get_pre`及对应的dual API都会返回`TFDB_CFG_ERR`。以常见的256字节块为例，容量上限为：  
+
+|TFDB_WRITE_UNIT_BYTES|1|2|4|8|
+-|-|-|-
+|单块value_length上限|250|250|250|246|
+|dual最长用户数据（字节）|248|248|248|244|  
 
 |前value_length个字节|第value_length+1字节|第value_length+2字节|其他对齐字节|
 -|-|-|-
@@ -297,7 +321,7 @@ Flash初始化后头部信息为4字节，所以只支持1、2、4、8字节操�
 数据前部两字节seq的合法值由`TFDB_DUAL_SEQ_COUNT`决定：默认为3种（0x00ff->0x0ff0->0xff00），可配置为5种（0xff00->0xf0f0->0x0ff0->0x0f0f->0x00ff）。  
 如此循环往复，通过读取两个block中最新变量的seq来判断哪个flash扇区中存储的是最新值。  
 当最新值存储在第一扇区时，下次写入则会在第二扇区写入，反之亦然。  
-5值循环将`tfdb_dual_get_pre`的判别窗口从3次写入扩大到5次写入，两块中需要更多条连续损坏记录才会出现判别歧义；两套值集互不兼容，切换配置前需擦除重新初始化两个flash块，否则会返回`TFDB_SEQ_ERR`。  
+5值循环将`tfdb_dual_get_pre`的判别窗口从3次写入扩大到5次写入，两块中需要更多条连续损坏记录才会出现判别歧义；两套值集互不兼容，且切换无法被程序检测——部分旧值在另一套循环中仍是合法值，不重新初始化直接切换会使库静默误判最新数据所在的扇区（返回旧数据），所以切换配置前必须擦除并重新初始化两个flash块。  
 `tfdb_dual_get_pre`通过seq在循环中的前后关系，比较两个候选记录（另一扇区中最新的记录，和当前扇区中的上一条有效记录）哪个是上一次保存的数据，即使其中一条候选记录损坏，也能返回可以读取到的最新的较早数据。  
 
 ## TinyFlashDB移植和配置
@@ -359,45 +383,40 @@ typedef uint32_t    tfdb_addr_t;
 
 ## TFDB资源占用
 
-在去除DEBUG打印信息后，资源占用如下：
+在去除DEBUG和LOG打印信息后（两者定义为空），TFDB_WRITE_UNIT_BYTES=4、TFDB_DUAL_SEQ_COUNT=3配置下的tinyflashdb.c代码占用如下（芯片相关的tfdb_port接口实现不计算在内，由用户平台决定）：
 
 ### Cortex M4平台
 
-keil -o2编译优化选项
+arm-none-eabi-gcc 9.3.1，-O2 -mcpu=cortex-m4 -mthumb
 
 ```c
-      Code (inc. data)   RO Data    RW Data    ZI Data      Debug   Object Name
-
-       154          0          0          0          0       2621   tfdb_port.o
-       682          0          0          0          0       4595   tinyflashdb.o
+tfdb_check           0x3a
+tfdb_init            0x42
+tfdb_get             0x13a
+tfdb_get_pre         0x86
+tfdb_set             0x19a
+tfdb_dual_get        0xc6
+tfdb_dual_get_pre    0x2a4
+tfdb_dual_set        0x10a
+.text 合计           0x8a0（2208字节，单块模式约0x350）
 ```
 
 ### RISC-V平台
 
-gcc -os编译优化选项
+riscv32-wch-elf-gcc 15.2.0，-Os -march=rv32imac -mabi=ilp32
 
 ```c
- .text.tfdb_port_read
-                0x00000000000039b4       0x1a ./Drivers/TFDB/tfdb_port.o
-                0x00000000000039b4                tfdb_port_read
- .text.tfdb_port_erase
-                0x00000000000039ce       0x46 ./Drivers/TFDB/tfdb_port.o
-                0x00000000000039ce                tfdb_port_erase
- .text.tfdb_port_write
-                0x0000000000003a14       0x5c ./Drivers/TFDB/tfdb_port.o
-                0x0000000000003a14                tfdb_port_write
- .text.tfdb_check
-                0x0000000000003a70       0x56 ./Drivers/TFDB/tinyflashdb.o
-                0x0000000000003a70                tfdb_check
- .text.tfdb_init
-                0x0000000000003ac6       0x56 ./Drivers/TFDB/tinyflashdb.o
-                0x0000000000003ac6                tfdb_init
- .text.tfdb_set
-                0x0000000000003b1c      0x186 ./Drivers/TFDB/tinyflashdb.o
-                0x0000000000003b1c                tfdb_set
- .text.tfdb_get
-                0x0000000000003ca2      0x11c ./Drivers/TFDB/tinyflashdb.o
-                0x0000000000003ca2                tfdb_get
+tfdb_check           0x5c
+tfdb_init            0x68
+tfdb_get             0x140
+tfdb_get_pre         0x88
+tfdb_set             0x1b8
+tfdb_dual_seq_valid  0x40
+tfdb_dual_judge      0x66
+tfdb_dual_get        0x11c
+tfdb_dual_get_pre    0x2d0
+tfdb_dual_set        0x138
+.text 合计           0xa0e（2574字节，单块模式约0x3bc）
 ```
 
 ## Demo

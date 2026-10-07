@@ -12,6 +12,7 @@
  * 2022-08-02     smartmx      add TFDB_VALUE_AFTER_ERASE_SIZE option
  * 2023-02-22     smartmx      add dual flash index function
  * 2026-09-21     smartmx      add TFDB_DUAL_SEQ_COUNT option for dual seq cycle.
+ * 2026-10-04     smartmx      add TFDB_CFG_ERR error code and TFDB_WRITE_UNIT_BYTES check.
  *
  */
 #ifndef _TFDB_PORT_H_
@@ -35,6 +36,7 @@ typedef enum
     TFDB_FLASH2_ERR,
     TFDB_NO_DATA,
     TFDB_NO_PRE_DATA,
+    TFDB_CFG_ERR,   /* the value_length is too large for the flash block */
     TFDB_ERR_MAX,
 } TFDB_Err_Code;
 
@@ -70,6 +72,10 @@ typedef enum
 
 #if TFDB_VALUE_AFTER_ERASE_SIZE > TFDB_WRITE_UNIT_BYTES
     #error "TFDB_VALUE_AFTER_ERASE_SIZE must not bigger than TFDB_WRITE_UNIT_BYTES."
+#endif
+
+#if (TFDB_WRITE_UNIT_BYTES!=1) && (TFDB_WRITE_UNIT_BYTES!=2) && (TFDB_WRITE_UNIT_BYTES!=4) && (TFDB_WRITE_UNIT_BYTES!=8)
+    #error "TFDB_WRITE_UNIT_BYTES only support 1, 2, 4 or 8."
 #endif
 
 /* @note the max retry times when flash is error ,set 0 will disable retry count */

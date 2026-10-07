@@ -13,6 +13,7 @@
  * 2023-02-22     smartmx      add dual flash index function
  * 2023-11-07     smartmx      fix bugs, tfdb_get error when flash write in tfdb_set not success.
  * 2026-09-21     smartmx      add tfdb_dual_get_pre function and TFDB_DUAL_SEQ_COUNT option.
+ * 2026-10-04     smartmx      fix the aligned_value_size overflow, add the value size check.
  *
  */
 #include "tinyflashdb.h"
@@ -115,6 +116,44 @@ end:
 }
 
 /**
+ * get the aligned size of the value for the flash write granularity,
+ * and check whether the value can be stored in the flash block or not.
+ *
+ * @param index the data manage index.
+ *
+ * @return uint16_t the aligned size of the value,
+ *         0 means the value_length is too large for the flash block.
+ */
+static uint16_t tfdb_aligned_size(const tfdb_index_t *index)
+{
+    uint16_t aligned_value_size;
+
+    aligned_value_size = (uint16_t)(index->value_length + 2);/* data + verify + end_byte */
+
+#if (TFDB_WRITE_UNIT_BYTES==2)
+    /* aligned with TFDB_WRITE_UNIT_BYTES */
+    aligned_value_size = (uint16_t)((aligned_value_size + 1) & ~(TFDB_WRITE_UNIT_BYTES - 1));
+#elif (TFDB_WRITE_UNIT_BYTES==4)
+    /* aligned with TFDB_WRITE_UNIT_BYTES */
+    aligned_value_size = (uint16_t)((aligned_value_size + 3) & ~(TFDB_WRITE_UNIT_BYTES - 1));
+#elif (TFDB_WRITE_UNIT_BYTES==8)
+    /* aligned with TFDB_WRITE_UNIT_BYTES */
+    aligned_value_size = (uint16_t)((aligned_value_size + 7) & ~(TFDB_WRITE_UNIT_BYTES - 1));
+#endif
+
+#if (TFDB_WRITE_UNIT_BYTES==8)
+    if (aligned_value_size > index->flash_size - 8)
+#else
+    if (aligned_value_size > index->flash_size - 4)
+#endif
+    {
+        /* the value can not be stored in this flash block. */
+        return 0;
+    }
+    return aligned_value_size;
+}
+
+/**
  * set data in flash and save the addr to addr_cache.
  *
  * @param index the data manage index.
@@ -128,28 +167,23 @@ TFDB_Err_Code tfdb_set(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
 {
     TFDB_Err_Code result;
     tfdb_addr_t find_addr;
-    uint8_t aligned_value_size;
+    uint16_t aligned_value_size;
     uint8_t sum_verify_byte;
-    uint8_t i;
+    uint16_t i;
 #if TFDB_WRITE_MAX_RETRY
     uint32_t max_retry = 0;
 #endif
 
     TFDB_DEBUG("tfdb_set >\n");
 
-    aligned_value_size  = index->value_length + 2;/* data + verify + end_byte */
-
-#if (TFDB_WRITE_UNIT_BYTES==2)
-    /* aligned with TFDB_WRITE_UNIT_BYTES */
-    aligned_value_size = ((aligned_value_size + 1) & 0xfe);
-#elif (TFDB_WRITE_UNIT_BYTES==4)
-    /* aligned with TFDB_WRITE_UNIT_BYTES */
-    aligned_value_size = ((aligned_value_size + 3) & 0xfc);
-#elif (TFDB_WRITE_UNIT_BYTES==8)
-    /* aligned with TFDB_WRITE_UNIT_BYTES */
-    aligned_value_size = ((aligned_value_size + 7) & 0xf8);
-#endif
-    TFDB_LOG("aigned size:%d\n", aligned_value_size);
+    aligned_value_size = tfdb_aligned_size(index);
+    if (aligned_value_size == 0)
+    {
+        /* the value_length is too large for the flash block. */
+        TFDB_DEBUG("    value size too large\n");
+        return TFDB_CFG_ERR;
+    }
+    TFDB_LOG("aligned size:%d\n", aligned_value_size);
 
     if (addr_cache == NULL)
     {
@@ -306,24 +340,19 @@ TFDB_Err_Code tfdb_get(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_
 {
     TFDB_Err_Code result;
     tfdb_addr_t find_addr;
-    uint8_t aligned_value_size;
+    uint16_t aligned_value_size;
     uint8_t sum_verify_byte;
     uint8_t i;
     TFDB_LOG("tfdb_get >\n");
 
-    aligned_value_size  = index->value_length + 2;/* data + verify + end_byte */
-
-#if (TFDB_WRITE_UNIT_BYTES==2)
-    /* aligned with TFDB_WRITE_UNIT_BYTES */
-    aligned_value_size = ((aligned_value_size + 1) & 0xfe);
-#elif (TFDB_WRITE_UNIT_BYTES==4)
-    /* aligned with TFDB_WRITE_UNIT_BYTES */
-    aligned_value_size = ((aligned_value_size + 3) & 0xfc);
-#elif (TFDB_WRITE_UNIT_BYTES==8)
-    /* aligned with TFDB_WRITE_UNIT_BYTES */
-    aligned_value_size = ((aligned_value_size + 7) & 0xf8);
-#endif
-    TFDB_LOG("aigned size:%d\n", aligned_value_size);
+    aligned_value_size = tfdb_aligned_size(index);
+    if (aligned_value_size == 0)
+    {
+        /* the value_length is too large for the flash block. */
+        TFDB_DEBUG("    value size too large\n");
+        return TFDB_CFG_ERR;
+    }
+    TFDB_LOG("aligned size:%d\n", aligned_value_size);
 
     if (addr_cache == NULL)
     {
@@ -463,7 +492,7 @@ end:
 TFDB_Err_Code tfdb_get_pre(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_addr_t *addr_cache, tfdb_addr_t *pre_addr_cache, void *value_to)
 {
     TFDB_Err_Code result;
-    uint8_t aligned_value_size;
+    uint16_t aligned_value_size;
     tfdb_addr_t find_addr;
 
     TFDB_LOG("tfdb_get_pre >\n");
@@ -479,20 +508,16 @@ TFDB_Err_Code tfdb_get_pre(const tfdb_index_t *index, uint8_t *rw_buffer, tfdb_a
             find_addr = *addr_cache;
             TFDB_LOG("find_addr:%x\n", find_addr);
 find:
-            aligned_value_size  = index->value_length + 2;  /* data + verify + end_byte */
+            aligned_value_size = tfdb_aligned_size(index);
+            if (aligned_value_size == 0)
+            {
+                /* the value_length is too large for the flash block. */
+                TFDB_DEBUG("    value size too large\n");
+                result = TFDB_CFG_ERR;
+                goto end;
+            }
 
-#if (TFDB_WRITE_UNIT_BYTES==2)
-            /* aligned with TFDB_WRITE_UNIT_BYTES */
-            aligned_value_size = ((aligned_value_size + 1) & 0xfe);
-#elif (TFDB_WRITE_UNIT_BYTES==4)
-            /* aligned with TFDB_WRITE_UNIT_BYTES */
-            aligned_value_size = ((aligned_value_size + 3) & 0xfc);
-#elif (TFDB_WRITE_UNIT_BYTES==8)
-            /* aligned with TFDB_WRITE_UNIT_BYTES */
-            aligned_value_size = ((aligned_value_size + 7) & 0xf8);
-#endif
-
-            TFDB_LOG("aigned size:%d\n", aligned_value_size);
+            TFDB_LOG("aligned size:%d\n", aligned_value_size);
 
 #if (TFDB_WRITE_UNIT_BYTES==8)
             if(find_addr >= (index->flash_addr + 8 + aligned_value_size))
